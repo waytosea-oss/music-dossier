@@ -2,6 +2,8 @@ import Foundation
 
 public struct AppConfiguration: Codable, Sendable {
     public let researchProvider: String?
+    /// 界面与档案语言："auto"（跟随系统）或 en / zh-Hans / zh-Hant / ja / ko / es / fr / de / pt / ru / it
+    public let language: String?
     public let claudeModel: String?
     public let claudeExecutablePath: String?
     public let claudeEffort: String?
@@ -45,6 +47,7 @@ public struct AppConfiguration: Codable, Sendable {
 
         return AppConfiguration(
             researchProvider: envString("MUSIC_DOSSIER_RESEARCH_PROVIDER") ?? fileConfig?.researchProvider,
+            language: envString("MUSIC_DOSSIER_LANGUAGE") ?? fileConfig?.language,
             claudeModel: envString("MUSIC_DOSSIER_CLAUDE_MODEL") ?? fileConfig?.claudeModel,
             claudeExecutablePath: envString("MUSIC_DOSSIER_CLAUDE_PATH") ?? fileConfig?.claudeExecutablePath,
             claudeEffort: envString("MUSIC_DOSSIER_CLAUDE_EFFORT") ?? fileConfig?.claudeEffort,
@@ -74,6 +77,10 @@ public struct AppConfiguration: Codable, Sendable {
 
     public var normalizedResearchProvider: String {
         researchProvider?.trimmedNonEmpty?.lowercased() ?? "auto"
+    }
+
+    public var resolvedLanguage: AppLanguage {
+        AppLanguage.resolve(language)
     }
 
     public static let defaultClaudeModel = "claude-opus-4-8"

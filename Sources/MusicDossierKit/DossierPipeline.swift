@@ -11,17 +11,20 @@ public actor DossierPipeline {
     private let buildDossierClosure: @Sendable (TrackSnapshot) async throws -> ResearchDossier
     private let obsidianExporter: ObsidianExporter?
     private let session: URLSession
+    private let language: AppLanguage
 
     public init(
         cacheStore: CacheStore,
         buildDossier: @escaping @Sendable (TrackSnapshot) async throws -> ResearchDossier,
         obsidianExporter: ObsidianExporter? = nil,
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        language: AppLanguage = .en
     ) {
         self.cacheStore = cacheStore
         self.buildDossierClosure = buildDossier
         self.obsidianExporter = obsidianExporter
         self.session = session
+        self.language = language
     }
 
     public func loadCachedDossier(for trackKey: String) async throws -> CachedDossier? {
@@ -59,8 +62,9 @@ public actor DossierPipeline {
                 dossier: hydratedDossier,
                 artworkURL: artworkURL,
                 visualAssetRootURL: cacheStore.visualsDirectoryURL,
-                statusHeadline: "研究档案已更新",
-                statusDetail: "由 Claude 联网检索并整理。",
+                language: language,
+                statusHeadline: L10n(language).t("st.updated.title"),
+                statusDetail: L10n(language).t("st.byClaude"),
                 cachedAt: .now,
                 isPinned: false,
                 isStale: false
@@ -129,7 +133,7 @@ public actor DossierPipeline {
                         return (index, person)
                     }
                     let title = person.wikipediaTitle ?? person.name
-                    guard let resolved = await WikipediaImageResolver.resolve(title: title, lang: person.wikipediaLang, session: self.session),
+                    guard let resolved = await WikipediaImageResolver.resolve(title: title, lang: person.wikipediaLang, fallbackLang: self.language.wikipediaLang, session: self.session),
                           let asset = await self.downloadFirstImageAsset(from: resolved.imageCandidates),
                           let fileName = try? await self.cacheStore.saveVisualAsset(asset.data, trackKey: trackKey, remoteURL: asset.cacheKey, fileExtension: asset.fileExtension)
                     else {
@@ -174,7 +178,7 @@ public actor DossierPipeline {
     private func cacheVisualAsset(for visual: DossierVisual, trackKey: String) async -> (fileName: String, sourceURL: String?)? {
         // 1. 维基百科词条首图（最可靠）
         if let title = visual.wikipediaTitle,
-           let resolved = await WikipediaImageResolver.resolve(title: title, lang: visual.wikipediaLang, session: session),
+           let resolved = await WikipediaImageResolver.resolve(title: title, lang: visual.wikipediaLang, fallbackLang: language.wikipediaLang, session: session),
            let asset = await downloadFirstImageAsset(from: resolved.imageCandidates),
            let fileName = try? cacheStore.saveVisualAsset(asset.data, trackKey: trackKey, remoteURL: asset.cacheKey, fileExtension: asset.fileExtension)
         {

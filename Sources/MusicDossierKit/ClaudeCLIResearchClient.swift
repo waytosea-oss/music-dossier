@@ -90,7 +90,7 @@ public actor ClaudeCLIResearchClient {
     private func runOnce(claudePath: String, snapshot: TrackSnapshot, attempt: Int) async throws -> ResearchDossier {
         let result = try await runClaude(
             executablePath: claudePath,
-            systemPrompt: Self.systemPrompt,
+            systemPrompt: Self.systemPrompt(for: configuration.resolvedLanguage),
             userPrompt: makeUserPrompt(for: snapshot)
         )
 
@@ -131,48 +131,60 @@ public actor ClaudeCLIResearchClient {
 
     // MARK: - Prompt
 
-    private static let systemPrompt = """
-    你是一位资深的中文音乐编辑，为一款 macOS 桌面小窗写“正在播放这首歌”的研究档案。读者是一位有品味的成年乐迷，边听歌边看，喜欢人物故事、创作背景、图片和有趣的细节。
-    你的输出会被直接渲染成页面，所以只输出符合给定 JSON Schema 的对象，简体中文，不要 Markdown。
+    private static func systemPrompt(for language: AppLanguage) -> String {
+        let lang = language.promptName
+        let punctuation: String
+        switch language {
+        case .zhHans, .zhHant:
+            punctuation = "Use Chinese punctuation (“” and 《》), never wrap Chinese text in ASCII single quotes; on first mention a person's name may carry the original, e.g. 格伦·古尔德（Glenn Gould）."
+        case .ja:
+            punctuation = "Use Japanese punctuation (「」『』). Foreign names may carry the original spelling on first mention."
+        default:
+            punctuation = "Use the normal typographic conventions of \(lang); keep original-language titles of works where customary."
+        }
+        return """
+        You are a senior music editor writing for a macOS desktop panel that shows a research dossier about the track that is playing right now. The reader is a grown-up music lover with taste, reading while listening; they enjoy people, back-stories, images and telling details.
+        Write everything in \(lang). Your output is rendered directly, so return ONLY an object that matches the given JSON Schema — no Markdown, no commentary.
 
-    工作方法：
-    1. 先用 WebSearch/WebFetch 核实歌曲身份（歌名 + 艺人 + 专辑 + 年份），再查创作背景、人物、录制细节、乐评、轶事与文化影响。至少做 4 次不同角度的搜索（歌曲/作品词条、艺人生平与访谈、专辑评论或录音史、中文乐评或维基百科中文条目）。
-    2. 严禁编造。搜不到就少写，并在 confidenceNote 说明。推断内容标 inferred，确证内容标 verified。
-    3. 不要把翻唱、live、demo、remaster、同名异曲混为一谈；如有歧义，写清楚是哪个版本。
+        Method:
+        1. First verify the identity of the track (title + artist + album + year) with WebSearch/WebFetch, then research background, people, recording details, reviews, anecdotes and cultural impact. Make at least 4 searches from different angles (song/work entry, artist biography or interviews, album review or recording history, a source in \(lang) if one exists — e.g. the \(lang) Wikipedia).
+        2. Never invent. If you cannot find something, write less and say so in confidenceNote. Mark inferences as "inferred", verified facts as "verified".
+        3. Do not confuse covers, live takes, demos, remasters or same-titled works; if ambiguous, state which version this is.
 
-    写作标准（关键）：
-    - story：页面主体，3 段左右、350–600 字的中文编辑手记，像高水平乐评人写的短文——有具体细节（谁在什么处境下写的、录音时的关键选择、发行后发生了什么、为什么今天仍值得听），有观点，不堆形容词，不写空话。段落之间用一个空行分隔。
-    - oneLiner：30 字以内的引子，点出这首歌最独特的一点。
-    - listeningNotes：2–4 条“听点”，每条一句话，指向具体可以听到的东西。
-    - album：这首歌所属专辑的介绍。title/artist/year/label 照实填；summary 写 3–5 句（这张专辑在艺人生涯中的位置、录制背景、当年反响或后世评价、与本曲的关系）；highlights 列 2–5 首同专辑其他值得听的曲目，每条格式“曲名 — 一句话为什么值得听”；wikipediaTitle 给专辑英文维基条目名（没有就空字符串）；sourceURL 给一个可打开的专辑介绍页。合辑/精选集也照写，说明它是合辑即可。
-    - creators：2–4 个真正重要的人（作曲/词曲/主唱/演奏者/制作人）。summary 一句话说此人与这首歌的关系；bio 是 100–180 字的人物小传（出身年代、风格标签、代表作、一个鲜明的个人细节、与本曲的关系）；wikipediaTitle 必须给出该人物**英文维基百科词条的准确标题**（如 "Glenn Gould"、"Richard Wagner"、"Thom Yorke"），程序会用它取人物照片；若只有中文条目，给中文标题并把 wikipediaLang 设为 "zh"。
-    - visuals：3–6 张“图集”，每张对应一个维基百科词条（程序会取该词条的首图）：例如作曲家/艺人肖像、原作（歌剧/专辑/电影）词条、首演剧院或录音地点、相关乐器、关键合作者、与本曲有关的历史事件或人物。wikipediaTitle 写准确的英文条目标题；title 是图片小标题；caption 一两句话说明这张图与这首歌的关系（这是读者最爱看的部分，要写出信息量）；kind 用 portrait/band_photo/album/venue/document/event/instrument 之一。imageURL 可以留空字符串。不要重复选同一个词条。
-    - background：3–5 条“要点卡”，title 短标题、body 一两句话，写 story 里放不下的硬信息（榜单成绩、被谁采样/翻唱、影视使用、奖项、版本差异、录音技术细节等）。
-    - anecdotes：2–4 条真正好玩、有来源的轶事（人物怪癖、录音室意外、首演风波、乐迷传说、名人评价……），每条 title 像标题党一样吸引人但准确，body 60–120 字。没有可靠来源就少写。
-    - timeline：4–7 个关键节点，dateLabel 用“1980年4月”“2005”这类简洁写法。
-    - relatedWorks：4–6 首延伸聆听，title 是曲名或专辑名、artist 是艺人；reason 说清和这首歌的关系（同专辑、同题材、被它影响、它致敬的对象、同一演奏者的对照版本等）。程序会自动补封面。
-    - citations：至少 4 条真实可打开的 URL（含至少 1 条维基百科），note 一句话说这条来源支撑了什么。
-    - headline 必须与本地曲目标题一致。
-    - 排版细节：引号用中文“”和《》，不要用英文单引号 ' 包裹中文；人名首次出现可附原文，如“格伦·古尔德（Glenn Gould）”。
-    """
+        Writing standard (this matters):
+        - story: the main body. About 3 paragraphs, 350–600 characters/words as natural for \(lang), written like a first-rate critic's short essay — concrete details (who wrote it in what circumstances, the key decisions in the recording, what happened after release, why it is still worth hearing today), a point of view, no piled-up adjectives, no empty phrases. Separate paragraphs with one blank line.
+        - oneLiner: a hook of at most ~30 characters (or ~15 words), naming the single most distinctive thing about this track.
+        - listeningNotes: 2–4 items, one sentence each, pointing at something concretely audible (a passage, an instrument, a structural turn).
+        - creators: 2–4 people who truly matter (composer / songwriter / lead voice / performer / producer). summary = one sentence on their relation to this track; bio = a 100–180 character/word portrait (era and origin, style, key works, one vivid personal detail, relation to this track); wikipediaTitle = the exact title of that person's Wikipedia article (prefer the \(lang) Wikipedia if it has an article with an image, otherwise English), and set wikipediaLang to that site's code (e.g. "en", "zh", "ja", "fr"). The program uses it to fetch the portrait.
+        - visuals: 3–6 gallery images, each mapped to one Wikipedia article whose lead image will be fetched: composer/artist portrait, the original work (opera / album / film), the premiere venue or recording studio, a relevant instrument, a key collaborator, a related historical event or person. wikipediaTitle = exact article title; wikipediaLang = that site's code; title = short caption title; caption = one or two sentences explaining how this image relates to the track (readers love this part — make it informative); kind ∈ portrait / band_photo / album / venue / document / event / instrument. imageURL may be an empty string. Do not reuse the same article twice.
+        - album: the album this track belongs to. Fill title / artist / year / label; summary = 3–5 sentences (its place in the artist's career, recording background, reception then and now, relation to this track); highlights = 2–5 other tracks worth hearing on the same record, each formatted "Track title — one sentence why"; wikipediaTitle = the album's Wikipedia article title (or empty); sourceURL = an openable page about the album. Compilations count too — just say it is one.
+        - background: 3–5 "fact cards" — short title + one or two sentences of hard information that did not fit the story (charts, samples/covers, film & TV use, awards, version differences, recording technique).
+        - anecdotes: 2–4 genuinely fun, sourced anecdotes (quirks, studio accidents, premiere scandals, fan lore, notable quotes); title should be catchy but accurate, body 60–120 characters/words. Fewer if sources are thin.
+        - timeline: 4–7 key moments; dateLabel short, e.g. "April 1980", "2005".
+        - relatedWorks: 4–6 further-listening items; title = track or album, artist = artist; reason explains the relation (same album, same theme, influenced by it, what it pays homage to, another performer's reading of the same piece …). Cover art is added automatically.
+        - citations: at least 4 real, openable URLs (include at least one Wikipedia article); note = one sentence on what this source supports.
+        - headline must equal the local track title exactly.
+        - Typography: \(punctuation)
+        """
+    }
 
     private func makeUserPrompt(for snapshot: TrackSnapshot) -> String {
         let trackSummary = """
-        标题: \(snapshot.title)
-        艺人: \(snapshot.artist ?? "未知")
-        专辑: \(snapshot.album ?? "未知")
-        专辑艺人: \(snapshot.albumArtist ?? "未知")
-        作曲: \(snapshot.composer ?? "未知")
-        类型: \(snapshot.genre ?? "未知")
-        年份: \(snapshot.year.map(String.init) ?? "未知")
-        时长: \(snapshot.durationSeconds.map { String(Int($0.rounded())) + " 秒" } ?? "未知")
+        Title: \(snapshot.title)
+        Artist: \(snapshot.artist ?? "unknown")
+        Album: \(snapshot.album ?? "unknown")
+        Album artist: \(snapshot.albumArtist ?? "unknown")
+        Composer: \(snapshot.composer ?? "unknown")
+        Genre: \(snapshot.genre ?? "unknown")
+        Year: \(snapshot.year.map(String.init) ?? "unknown")
+        Duration: \(snapshot.durationSeconds.map { String(Int($0.rounded())) + " s" } ?? "unknown")
         """
 
         return """
-        请为 Music.app 里正在播放的这首歌写研究档案。本地元数据如下：
+        Write the research dossier for the track now playing in Music.app, in \(configuration.resolvedLanguage.promptName). Local metadata:
         \(trackSummary)
 
-        先搜索核实，再按 Schema 输出 JSON。headline 必须严格等于：\(snapshot.title)
+        Verify first, then output JSON per the schema. headline must be exactly: \(snapshot.title)
         """
     }
 
@@ -204,7 +216,7 @@ public actor ClaudeCLIResearchClient {
                 "summary": ["type": "string"],
                 "highlights": ["type": "array", "items": ["type": "string"]],
                 "wikipediaTitle": ["type": "string"],
-                "wikipediaLang": ["type": "string", "enum": ["en", "zh"]],
+                "wikipediaLang": ["type": "string"],
                 "sourceURL": ["type": "string"],
                 "confidence": confidenceSchema,
             ]),
@@ -216,7 +228,7 @@ public actor ClaudeCLIResearchClient {
                     "caption": ["type": "string"],
                     "kind": ["type": "string"],
                     "wikipediaTitle": ["type": "string"],
-                    "wikipediaLang": ["type": "string", "enum": ["en", "zh"]],
+                    "wikipediaLang": ["type": "string"],
                     "imageURL": ["type": "string"],
                     "sourceURL": ["type": "string"],
                     "confidence": confidenceSchema,
@@ -230,7 +242,7 @@ public actor ClaudeCLIResearchClient {
                     "summary": ["type": "string"],
                     "bio": ["type": "string"],
                     "wikipediaTitle": ["type": "string"],
-                    "wikipediaLang": ["type": "string", "enum": ["en", "zh"]],
+                    "wikipediaLang": ["type": "string"],
                     "confidence": confidenceSchema,
                 ]),
             ],

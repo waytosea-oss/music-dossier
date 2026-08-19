@@ -1,8 +1,10 @@
 # 听歌档案 Music Dossier
 
+**中文** · [English](README.en.md)
+
 > 给 Apple Music 配一个乐评人。你放什么歌，它就在旁边写一份档案：**编辑手记、听点、专辑、人物、图集、轶事、时间线、延伸聆听、来源**——带图，有出处，两分钟出稿，再放秒开。
 
-![macOS](https://img.shields.io/badge/macOS-14%2B%20only-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![Claude](https://img.shields.io/badge/engine-Claude%20Code%20CLI-8A63D2) ![License](https://img.shields.io/badge/license-MIT-green)
+![macOS](https://img.shields.io/badge/macOS-14%2B%20only-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![Claude](https://img.shields.io/badge/engine-Claude%20Code%20CLI-8A63D2) ![License](https://img.shields.io/badge/license-MIT-green) ![i18n](https://img.shields.io/badge/languages-11-purple)
 
 <p align="center">
   <img src="docs/screenshots/demo-switch.gif" width="560" alt="换一首歌，小窗跟着换 · Switch tracks, the dossier follows">
@@ -34,7 +36,7 @@
 </p>
 </details>
 
-**English**: A macOS-only floating panel that follows Apple Music. Whenever a new track plays, it hands the title / artist / album to **Claude** (via your local Claude Code CLI), lets it research the web for ~2 minutes, and renders a Chinese-language dossier: editor's notes, listening notes, album card, people with Wikipedia portraits and bios, an image gallery, key facts, anecdotes, timeline, related listening with cover art, and cited sources. Everything is cached locally — the second time a song plays, the page opens instantly. No server, no account: your Mac, your Claude login, your data. **Requires macOS 14+ and a logged-in Claude Code CLI.** The prose is written in Simplified Chinese by design; the prompt lives in one file ([`ClaudeCLIResearchClient.swift`](Sources/MusicDossierKit/ClaudeCLIResearchClient.swift)) if you want it in another language — PRs welcome.
+**English**: A macOS-only floating panel that follows Apple Music. Whenever a new track plays, it hands the title / artist / album to **Claude** (via your local Claude Code CLI), lets it research the web for ~2 minutes, and renders a dossier in your language: editor's notes, listening notes, album card, people with Wikipedia portraits and bios, an image gallery, key facts, anecdotes, timeline, related listening with cover art, and cited sources. Everything is cached locally — the second time a song plays, the page opens instantly. No server, no account: your Mac, your Claude login, your data. **Requires macOS 14+ and a logged-in Claude Code CLI.** Dossiers and UI come in **11 languages** (English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch, Português, Русский, Italiano) — it follows your system language, or set `"language"` in the config. Full English README: [README.en.md](README.en.md).
 
 ---
 
@@ -108,6 +110,7 @@ MUSIC_DOSSIER_BUNDLE_ID="com.yourname.musicdossier"
 
 ## 四、用法
 
+- **11 种语言**：档案正文和界面都跟随系统语言（简体/繁体中文、英、日、韩、西、法、德、葡、俄、意）；也可在配置里用 `"language"` 固定，比如 `"en"`、`"ja"`。
 - **自动跟歌**：Music 换一首，小窗换一份；换得太快时旧的研究会被取消，不白花钱。
 - **夜间 / 日间**：深浅两套配色，记住你的选择。
 - **固定**：按住当前这首不放，Music 跳到下一首也不冲掉；再点「取消固定」继续跟。
@@ -122,6 +125,7 @@ MUSIC_DOSSIER_BUNDLE_ID="com.yourname.musicdossier"
 
 | 键 | 默认 | 说明 |
 |---|---|---|
+| `language` | `auto` | 档案与界面语言：`auto`（跟随系统）/ `en` / `zh-Hans` / `zh-Hant` / `ja` / `ko` / `es` / `fr` / `de` / `pt` / `ru` / `it` |
 | `researchProvider` | `claude-cli` | 研究引擎：`claude-cli`（推荐）/ `auto` / `openai-responses` / `codex-cli` |
 | `claudeModel` | `claude-opus-4-8` | 传给 `claude --model` |
 | `claudeEffort` | `medium` | `low` 更省，`high` 更细 |
@@ -137,7 +141,7 @@ MUSIC_DOSSIER_BUNDLE_ID="com.yourname.musicdossier"
 ## 六、它是怎么做到的
 
 1. **听**：每 1.5 秒通过 AppleScript 问 Music 当前曲目，拿到曲名、艺人、专辑、时长、封面（流媒体拿不到封面时去 iTunes 补一张）。
-2. **查**：调用本机 `claude -p`，附上一段话——"你是一位资深中文音乐编辑……先联网核实这是哪个版本，再查创作背景、人物、录音细节、乐评、轶事，至少搜四轮，搜不到就少写、不许编"——并用 JSON Schema 约束输出结构（`--json-schema`）。网络抖动自动重试两次。
+2. **查**：调用本机 `claude -p`，附上一段话——"你是一位资深音乐编辑，用〈目标语言〉写作……先联网核实这是哪个版本，再查创作背景、人物、录音细节、乐评、轶事，至少搜四轮，搜不到就少写、不许编"——并用 JSON Schema 约束输出结构（`--json-schema`）。网络抖动自动重试两次。
 3. **配图**：模型只负责判断"该配哪个维基百科词条"，程序拿词条名去 Wikipedia REST API 取首图和来源页；专辑与延伸聆听的封面走 iTunes Search API。落盘前一律缩到 ≤1200px。谁擅长什么，就让谁干什么。
 4. **存**：SQLite 存档案 JSON，图片按歌缓存；展示旧档案时会补抓缺的图并回写；启动时清孤儿文件与超限缓存。
 
@@ -153,7 +157,7 @@ A: `claudeEffort` 改 `low`，或 `claudeModel` 换更便宜的模型。质量�
 A: 图来自维基百科词条首图，词条没有图就取不到；程序会保留条目，下次展示时再试一次。
 
 **Q: 想要英文 / 其他语言的档案？**
-A: 提示词全在 [`ClaudeCLIResearchClient.swift`](Sources/MusicDossierKit/ClaudeCLIResearchClient.swift) 的 `systemPrompt` 里，改成目标语言即可。
+A: 默认跟随系统语言；在 `config.json` 里写 `"language": "en"`（或 `ja` / `ko` / `es` / `fr` / `de` / `pt` / `ru` / `it` / `zh-Hant`）后重启即可，界面和档案一起切换。已缓存的歌仍是生成时的语言，点「刷新」重写。想加新语言：在 [`Localization.swift`](Sources/MusicDossierKit/Localization.swift) 补一列文案 + 语言名即可，PR 欢迎。
 
 **Q: 卸载怎么卸？**
 A: `Scripts/install_autolaunch.sh --remove`；删除 `/Applications/Music Dossier.app`、桌面启动器、`~/Library/Application Support/MusicDossier/`。
@@ -182,6 +186,7 @@ Sources/MusicDossierKit/
   ClaudeCLIResearchClient.swift   Claude Code CLI 引擎（提示词、Schema、重试、last-run.log）
   DossierPipeline.swift           研究 → 配图 → 缓存 → 导出
   HTMLRenderer.swift              页面渲染（日 / 夜两套配色）
+  Localization.swift              11 种语言的界面文案与语言解析
   WikipediaImageResolver.swift    维基百科词条首图
   ITunesArtworkLookup.swift       专辑封面
   ImageDownscaler.swift           落盘前缩图

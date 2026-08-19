@@ -83,6 +83,7 @@ enum MusicDossierSmokeTests {
                 snapshot: snapshot,
                 dossier: dossier,
                 artworkURL: nil,
+                language: .zhHans,
                 statusHeadline: "已命中缓存档案",
                 statusDetail: "直接读取本地缓存。",
                 cachedAt: .now,
@@ -95,7 +96,21 @@ enum MusicDossierSmokeTests {
         try expect(html.contains("时间线"), "renderer missing timeline section")
         try expect(html.contains("来源与说明"), "renderer missing sources drawer")
         try expect(html.contains("Coldplay"), "renderer missing hero meta")
+        try verifyLocalization()
         try expect(html.contains("music-dossier-scroll:"), "renderer missing scroll restore script")
+    }
+
+    private static func verifyLocalization() throws {
+        try expect(AppLanguage.resolve("zh-CN") == .zhHans, "zh-CN should map to zh-Hans")
+        try expect(AppLanguage.resolve("zh-TW") == .zhHant, "zh-TW should map to zh-Hant")
+        try expect(AppLanguage.resolve(nil, preferred: ["ja-JP"]) == .ja, "system ja should map to ja")
+        try expect(AppLanguage.resolve("auto", preferred: ["xx"]) == .en, "unknown falls back to en")
+        for language in AppLanguage.allCases {
+            let L = L10n(language)
+            try expect(L.t("sec.story") != "sec.story", "missing sec.story for \(language)")
+            try expect(L.t("btn.refresh") != "btn.refresh", "missing btn.refresh for \(language)")
+        }
+        try expect(L10n(.en).t("sec.sources", "4") == "Sources & Notes (4)", "placeholder substitution")
     }
 
     private static func expect(_ condition: Bool, _ message: String) throws {

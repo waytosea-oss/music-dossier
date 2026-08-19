@@ -1,4 +1,5 @@
 {
+  "language": "auto",
   "researchProvider": "claude-cli",
   "claudeModel": "claude-opus-4-8",
   "claudeEffort": "medium",

@@ -6,6 +6,7 @@ public actor ObsidianExporter {
     private let exportRootURL: URL
     private let notesDirectoryURL: URL
     private let assetsDirectoryURL: URL
+    private let L: L10n
 
     public init?(configuration: AppConfiguration, fileManager: FileManager = .default) throws {
         guard
@@ -23,6 +24,7 @@ public actor ObsidianExporter {
         self.fileManager = fileManager
         self.vaultURL = vaultURL
 
+        self.L = L10n(configuration.resolvedLanguage)
         let relativeRoot = configuration.obsidianExportRelativePath?.trimmedNonEmpty ?? "20_Music Dossier"
         self.exportRootURL = vaultURL.appendingPathComponent(relativeRoot, isDirectory: true)
         self.notesDirectoryURL = exportRootURL.appendingPathComponent("Notes", isDirectory: true)
@@ -140,25 +142,25 @@ public actor ObsidianExporter {
         }
 
         if !visualEntries.isEmpty {
-            lines.append("## 视觉档案")
+            lines.append("## \(L.t("sec.gallery"))")
             for entry in visualEntries {
                 lines.append("### \(entry.visual.title)")
                 lines.append(entry.embed)
                 lines.append("")
                 lines.append("> \(entry.visual.subject) · \(entry.visual.caption) · \(entry.visual.confidence.rawValue.uppercased())")
-                lines.append("> 来源：[打开链接](\(entry.visual.sourceURL))")
+                lines.append("> [\(L.t("link.source"))](\(entry.visual.sourceURL))")
                 lines.append("")
             }
         }
 
         if let story = dossier.story?.trimmedNonEmpty {
-            lines.append("## 编辑手记")
+            lines.append("## \(L.t("sec.story"))")
             lines.append(story)
             lines.append("")
         }
 
         if !dossier.listeningNotes.isEmpty {
-            lines.append("## 听点")
+            lines.append("## \(L.t("sec.notes"))")
             for (index, note) in dossier.listeningNotes.enumerated() {
                 lines.append("\(index + 1). \(note)")
             }
@@ -166,7 +168,7 @@ public actor ObsidianExporter {
         }
 
         if let album = dossier.album, album.isMeaningful {
-            lines.append("## 专辑")
+            lines.append("## \(L.t("sec.album"))")
             lines.append("**\(album.title)** · \(album.artist) · \(album.year) · \(album.label)")
             lines.append("")
             lines.append(album.summary)
@@ -174,18 +176,18 @@ public actor ObsidianExporter {
             lines.append("")
         }
 
-        lines.append("## 作品信息")
-        lines.append("- 艺人：\(snapshot.artist ?? "未知")")
-        lines.append("- 专辑：\(snapshot.album ?? "未知")")
-        lines.append("- 专辑艺人：\(snapshot.albumArtist ?? "未知")")
-        lines.append("- 作曲：\(snapshot.composer ?? "未知")")
-        lines.append("- 类型：\(snapshot.genre ?? "未知")")
-        lines.append("- 年份：\(snapshot.year.map(String.init) ?? "未知")")
+        lines.append("## \(L.t("md.trackInfo"))")
+        lines.append("- \(L.t("md.artist")): \(snapshot.artist ?? L.t("md.unknown"))")
+        lines.append("- \(L.t("sec.album")): \(snapshot.album ?? L.t("md.unknown"))")
+        lines.append("- \(L.t("pending.albumArtist")): \(snapshot.albumArtist ?? L.t("md.unknown"))")
+        lines.append("- \(L.t("pending.composer")): \(snapshot.composer ?? L.t("md.unknown"))")
+        lines.append("- \(L.t("pending.genre")): \(snapshot.genre ?? L.t("md.unknown"))")
+        lines.append("- \(L.t("md.year")): \(snapshot.year.map(String.init) ?? L.t("md.unknown"))")
         lines.append("")
 
-        lines.append("## 人物卡")
+        lines.append("## \(L.t("sec.people"))")
         if dossier.creators.isEmpty {
-            lines.append("- 暂无已整理人物条目。")
+            lines.append("- —")
         } else {
             for creator in dossier.creators {
                 lines.append("- **\(creator.name)** · \(creator.role) · \(creator.bio ?? creator.summary)")
@@ -193,9 +195,9 @@ public actor ObsidianExporter {
         }
         lines.append("")
 
-        lines.append("## 创作背景")
+        lines.append("## \(L.t("sec.facts"))")
         if dossier.background.isEmpty {
-            lines.append("- 暂无已整理背景条目。")
+            lines.append("- —")
         } else {
             for fact in dossier.background {
                 lines.append("- **\(fact.title)**：\(fact.body) · \(fact.confidence.rawValue.uppercased())")
@@ -203,9 +205,9 @@ public actor ObsidianExporter {
         }
         lines.append("")
 
-        lines.append("## 轶事与人物线索")
+        lines.append("## \(L.t("sec.anecdotes"))")
         if dossier.anecdotes.isEmpty {
-            lines.append("- 暂无已整理轶事条目。")
+            lines.append("- —")
         } else {
             for fact in dossier.anecdotes {
                 lines.append("- **\(fact.title)**：\(fact.body) · \(fact.confidence.rawValue.uppercased())")
@@ -213,9 +215,9 @@ public actor ObsidianExporter {
         }
         lines.append("")
 
-        lines.append("## 时间线")
+        lines.append("## \(L.t("sec.timeline"))")
         if dossier.timeline.isEmpty {
-            lines.append("- 暂无已整理时间线条目。")
+            lines.append("- —")
         } else {
             for event in dossier.timeline {
                 lines.append("- **\(event.dateLabel)** · \(event.title)：\(event.body) · \(event.confidence.rawValue.uppercased())")
@@ -223,9 +225,9 @@ public actor ObsidianExporter {
         }
         lines.append("")
 
-        lines.append("## 延伸作品")
+        lines.append("## \(L.t("sec.related"))")
         if dossier.relatedWorks.isEmpty {
-            lines.append("- 暂无已整理延伸作品。")
+            lines.append("- —")
         } else {
             for work in dossier.relatedWorks {
                 lines.append("- **\(work.title)** · \(work.artist)：\(work.reason) · \(work.confidence.rawValue.uppercased())")
@@ -233,13 +235,13 @@ public actor ObsidianExporter {
         }
         lines.append("")
 
-        lines.append("## 识别说明")
+        lines.append("## \(L.t("md.note"))")
         lines.append(dossier.confidenceNote)
         lines.append("")
 
-        lines.append("## 来源")
+        lines.append("## \(L.t("sec.sources", String(dossier.citations.count)))")
         if dossier.citations.isEmpty {
-            lines.append("- 暂无引用来源。")
+            lines.append("- —")
         } else {
             for citation in dossier.citations {
                 lines.append("- [\(citation.title)](\(citation.url)) · \(citation.publisher) · \(citation.note) · \(citation.confidence.rawValue.uppercased())")

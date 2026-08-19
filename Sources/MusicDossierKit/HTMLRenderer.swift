@@ -5,6 +5,7 @@ import Foundation
 public enum HTMLRenderer {
     public static func render(payload: RenderPayload) -> String {
         let scrollRestoreKey = scrollRestoreKey(for: payload)
+        let L = L10n(payload.language)
         let palette = palette(for: payload.theme)
         let themeClass = "theme-\(payload.theme.rawValue)"
 
@@ -19,8 +20,8 @@ public enum HTMLRenderer {
             artMarkup = #"<div class="cover placeholder"><span>♪</span></div>"#
         }
 
-        let title = snapshot?.title ?? dossier?.headline ?? "等待 Music 播放"
-        let metaLine = heroMetaLine(snapshot: snapshot)
+        let title = snapshot?.title ?? dossier?.headline ?? L.t("hero.waitTitle")
+        let metaLine = heroMetaLine(snapshot: snapshot, L: L)
         let oneLiner = dossier?.oneLiner.trimmedNonEmpty
         let oneLinerMarkup = oneLiner.map { #"<p class="lede">\#(display($0))</p>"# } ?? ""
 
@@ -28,31 +29,31 @@ public enum HTMLRenderer {
         let body: String
         if let dossier {
             body = [
-                renderStory(dossier.story, fallbackFacts: dossier.background),
-                renderListeningNotes(dossier.listeningNotes),
-                renderAlbum(dossier.album, artworkURL: payload.artworkURL),
-                renderCreators(dossier.creators, visuals: dossier.visuals, visualAssetRootURL: payload.visualAssetRootURL),
-                renderGallery(dossier.visuals, visualAssetRootURL: payload.visualAssetRootURL),
-                renderBackground(dossier.background, hasStory: dossier.story != nil),
-                renderAnecdotes(dossier.anecdotes),
-                renderTimeline(dossier.timeline),
-                renderRelatedWorks(dossier.relatedWorks, visualAssetRootURL: payload.visualAssetRootURL),
-                renderSources(dossier, cachedAt: payload.cachedAt),
+                renderStory(dossier.story, fallbackFacts: dossier.background, L: L),
+                renderListeningNotes(dossier.listeningNotes, L: L),
+                renderAlbum(dossier.album, artworkURL: payload.artworkURL, L: L),
+                renderCreators(dossier.creators, visuals: dossier.visuals, visualAssetRootURL: payload.visualAssetRootURL, L: L),
+                renderGallery(dossier.visuals, visualAssetRootURL: payload.visualAssetRootURL, L: L),
+                renderBackground(dossier.background, hasStory: dossier.story != nil, L: L),
+                renderAnecdotes(dossier.anecdotes, L: L),
+                renderTimeline(dossier.timeline, L: L),
+                renderRelatedWorks(dossier.relatedWorks, visualAssetRootURL: payload.visualAssetRootURL, L: L),
+                renderSources(dossier, cachedAt: payload.cachedAt, L: L),
             ].joined(separator: "\n")
         } else {
-            body = renderPendingState(payload: payload)
+            body = renderPendingState(payload: payload, L: L)
         }
 
         let errorBlock = payload.lastError.map {
-            #"<div class="notice error"><strong>本次刷新失败</strong><span>\#(display($0))</span></div>"#
+            #"<div class="notice error"><strong>\#(display(L.t("notice.refreshFailed")))</strong><span>\#(display($0))</span></div>"#
         } ?? ""
         let staleBlock = (payload.isStale && dossier != nil)
-            ? #"<div class="notice"><span>这份档案是缓存，后台正在更新。</span></div>"#
+            ? #"<div class="notice"><span>\#(display(L.t("notice.stale")))</span></div>"#
             : ""
 
         return """
         <!doctype html>
-        <html lang="zh-Hans">
+        <html lang="\(payload.language.htmlLang)">
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -87,7 +88,7 @@ public enum HTMLRenderer {
               margin: 0; padding: 0;
               background: var(--bg);
               color: var(--text);
-              font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+              font-family: -apple-system, "PingFang SC", "PingFang TC", "Hiragino Sans", "Hiragino Sans GB", "Apple SD Gothic Neo", "Helvetica Neue", sans-serif;
               font-size: 14px;
               line-height: 1.7;
               -webkit-font-smoothing: antialiased;
@@ -124,7 +125,7 @@ public enum HTMLRenderer {
             }
             .hero h1 {
               margin: 0 0 4px;
-              font-family: "New York", "Songti SC", "STSong", Georgia, serif;
+              font-family: "New York", "Songti SC", "Songti TC", "Hiragino Mincho ProN", "AppleMyungjo", Georgia, "Times New Roman", serif;
               font-size: 30px;
               line-height: 1.15;
               font-weight: 700;
@@ -135,7 +136,7 @@ public enum HTMLRenderer {
             .meta b { color: var(--text); font-weight: 600; }
             .lede {
               margin: 0;
-              font-family: "New York", "Songti SC", "STSong", Georgia, serif;
+              font-family: "New York", "Songti SC", "Songti TC", "Hiragino Mincho ProN", "AppleMyungjo", Georgia, "Times New Roman", serif;
               font-size: 16px;
               line-height: 1.5;
               color: var(--accent);
@@ -171,7 +172,7 @@ public enum HTMLRenderer {
             /* story */
             .story p {
               margin: 0 0 14px;
-              font-family: "New York", "Songti SC", "STSong", Georgia, serif;
+              font-family: "New York", "Songti SC", "Songti TC", "Hiragino Mincho ProN", "AppleMyungjo", Georgia, "Times New Roman", serif;
               font-size: 15.5px;
               line-height: 1.85;
               text-align: justify;
@@ -381,8 +382,8 @@ public enum HTMLRenderer {
 
     // MARK: - Sections
 
-    private static func heroMetaLine(snapshot: TrackSnapshot?) -> String {
-        guard let snapshot else { return "打开 Music 并播放一首歌" }
+    private static func heroMetaLine(snapshot: TrackSnapshot?, L: L10n) -> String {
+        guard let snapshot else { return display(L.t("hero.waitHint")) }
         var parts: [String] = []
         if let artist = snapshot.artist?.trimmedNonEmpty { parts.append("<b>\(display(artist))</b>") }
         if let album = snapshot.album?.trimmedNonEmpty { parts.append(display(album)) }
@@ -394,7 +395,7 @@ public enum HTMLRenderer {
         return parts.joined(separator: " · ")
     }
 
-    private static func renderStory(_ story: String?, fallbackFacts: [DossierFact]) -> String {
+    private static func renderStory(_ story: String?, fallbackFacts: [DossierFact], L: L10n) -> String {
         if let story = story?.trimmedNonEmpty {
             let paragraphs = story
                 .replacingOccurrences(of: "\r\n", with: "\n")
@@ -403,24 +404,24 @@ public enum HTMLRenderer {
                 .filter { !$0.isEmpty }
                 .map { "<p>\(display($0))</p>" }
                 .joined()
-            return "<section><h2>编辑手记</h2><div class=\"story\">\(paragraphs)</div></section>"
+            return "<section><h2>\(display(L.t("sec.story")))</h2><div class=\"story\">\(paragraphs)</div></section>"
         }
 
         // 旧缓存没有 story：把 background 的正文串成叙事，避免页面空洞
         guard !fallbackFacts.isEmpty else { return "" }
         let paragraphs = fallbackFacts.map { "<p>\(display($0.body))</p>" }.joined()
-        return "<section><h2>创作背景</h2><div class=\"story\">\(paragraphs)</div></section>"
+        return "<section><h2>\(display(L.t("sec.background")))</h2><div class=\"story\">\(paragraphs)</div></section>"
     }
 
-    private static func renderListeningNotes(_ notes: [String]) -> String {
+    private static func renderListeningNotes(_ notes: [String], L: L10n) -> String {
         guard !notes.isEmpty else { return "" }
         let items = notes.prefix(5).enumerated().map { index, note in
             "<li><span class=\"n\">\(index + 1)</span><span>\(display(note))</span></li>"
         }.joined()
-        return "<section><h2>听点</h2><ol class=\"notes\">\(items)</ol></section>"
+        return "<section><h2>\(display(L.t("sec.notes")))</h2><ol class=\"notes\">\(items)</ol></section>"
     }
 
-    private static func renderAlbum(_ album: DossierAlbum?, artworkURL: URL?) -> String {
+    private static func renderAlbum(_ album: DossierAlbum?, artworkURL: URL?, L: L10n) -> String {
         guard let album, album.isMeaningful else { return "" }
         let art: String
         if let artworkURL, let source = artworkSource(for: artworkURL) {
@@ -429,7 +430,7 @@ public enum HTMLRenderer {
             art = #"<div class="art">♪</div>"#
         }
         let meta = [album.artist, album.year, album.label].compactMap { $0.trimmedNonEmpty }.map(display).joined(separator: " · ")
-        let link = album.sourceURL.map { #"<a href="\#($0.htmlEscaped)">介绍页 ↗</a>"# } ?? ""
+        let link = album.sourceURL.map { #"<a href="\#($0.htmlEscaped)">\#(display(L.t("link.albumPage")))</a>"# } ?? ""
         let items = album.highlights.prefix(5).map { line -> String in
             // "曲名 — 说明" 拆成加粗曲名 + 说明
             let separators = [" — ", " – ", "——", " - ", "：", ": "]
@@ -443,9 +444,9 @@ public enum HTMLRenderer {
             return "<li>\(display(line))</li>"
         }.joined()
         let list = items.isEmpty ? "" : "<ul>\(items)</ul>"
-        let title = album.title.trimmedNonEmpty ?? "专辑"
+        let title = album.title.trimmedNonEmpty ?? L.t("sec.album")
         return """
-        <section><h2>专辑</h2>
+        <section><h2>\(display(L.t("sec.album")))</h2>
           <div class="album">
             \(art)
             <div>
@@ -459,7 +460,7 @@ public enum HTMLRenderer {
         """
     }
 
-    private static func renderCreators(_ creators: [DossierPerson], visuals: [DossierVisual], visualAssetRootURL: URL?) -> String {
+    private static func renderCreators(_ creators: [DossierPerson], visuals: [DossierVisual], visualAssetRootURL: URL?, L: L10n) -> String {
         guard !creators.isEmpty else { return "" }
         let items = creators.prefix(6).map { creator in
             var photoSource = resolvedImageSource(cachedFileName: creator.imageFileName, localRootURL: visualAssetRootURL)
@@ -475,7 +476,7 @@ public enum HTMLRenderer {
                 media = #"<div class="avatar">\#(display(initials(for: creator.name)))</div>"#
                 cardClass = "person no-photo"
             }
-            let link = creator.imageSourceURL.map { #"<a class="link" href="\#($0.htmlEscaped)">维基百科 ↗</a>"# } ?? ""
+            let link = creator.imageSourceURL.map { #"<a class="link" href="\#($0.htmlEscaped)">\#(display(L.t("link.wikipedia")))</a>"# } ?? ""
             let text = creator.bio ?? creator.summary
             return """
             <div class="\(cardClass)">
@@ -487,10 +488,10 @@ public enum HTMLRenderer {
             </div>
             """
         }.joined()
-        return "<section><h2>人物</h2><div class=\"people\">\(items)</div></section>"
+        return "<section><h2>\(display(L.t("sec.people")))</h2><div class=\"people\">\(items)</div></section>"
     }
 
-    private static func renderGallery(_ visuals: [DossierVisual], visualAssetRootURL: URL?) -> String {
+    private static func renderGallery(_ visuals: [DossierVisual], visualAssetRootURL: URL?, L: L10n) -> String {
         let shots = visuals.compactMap { visual -> (DossierVisual, String)? in
             guard let source = resolvedImageSource(cachedFileName: visual.cachedFileName, localRootURL: visualAssetRootURL) else { return nil }
             return (visual, source)
@@ -500,7 +501,7 @@ public enum HTMLRenderer {
             let (visual, source) = pair
             // 单数张时，让第一张横跨两列
             let wide = (shots.count % 2 == 1 && index == 0) ? " wide" : ""
-            let link = visual.displaySourceURL.trimmedNonEmpty.map { #"<a href="\#($0.htmlEscaped)">来源 ↗</a>"# } ?? ""
+            let link = visual.displaySourceURL.trimmedNonEmpty.map { #"<a href="\#($0.htmlEscaped)">\#(display(L.t("link.source")))</a>"# } ?? ""
             let title = visual.title.trimmedNonEmpty ?? visual.subject
             return """
             <figure class="shot\(wide)" style="margin:0">
@@ -509,37 +510,37 @@ public enum HTMLRenderer {
             </figure>
             """
         }.joined()
-        return "<section><h2>图集</h2><div class=\"gallery\">\(items)</div></section>"
+        return "<section><h2>\(display(L.t("sec.gallery")))</h2><div class=\"gallery\">\(items)</div></section>"
     }
 
-    private static func renderBackground(_ facts: [DossierFact], hasStory: Bool) -> String {
+    private static func renderBackground(_ facts: [DossierFact], hasStory: Bool, L: L10n) -> String {
         // 没有 story 时 background 已被当作叙事渲染，避免重复
         guard hasStory, !facts.isEmpty else { return "" }
         let items = facts.prefix(6).map { fact in
             """
             <div class="fact">
-              <div class="t"><span>\(display(fact.title))</span>\(inferredTag(fact.confidence))</div>
+              <div class="t"><span>\(display(fact.title))</span>\(inferredTag(fact.confidence, L: L))</div>
               <div class="b">\(display(fact.body))</div>
             </div>
             """
         }.joined()
-        return "<section><h2>要点</h2><div class=\"facts\">\(items)</div></section>"
+        return "<section><h2>\(display(L.t("sec.facts")))</h2><div class=\"facts\">\(items)</div></section>"
     }
 
-    private static func renderAnecdotes(_ facts: [DossierFact]) -> String {
+    private static func renderAnecdotes(_ facts: [DossierFact], L: L10n) -> String {
         guard !facts.isEmpty else { return "" }
         let items = facts.prefix(4).map { fact in
             """
             <div class="anecdote">
-              <div class="t">\(display(fact.title))\(inferredTag(fact.confidence))</div>
+              <div class="t">\(display(fact.title))\(inferredTag(fact.confidence, L: L))</div>
               <div class="b">\(display(fact.body))</div>
             </div>
             """
         }.joined()
-        return "<section><h2>轶事</h2>\(items)</section>"
+        return "<section><h2>\(display(L.t("sec.anecdotes")))</h2>\(items)</section>"
     }
 
-    private static func renderTimeline(_ timeline: [DossierTimelineEvent]) -> String {
+    private static func renderTimeline(_ timeline: [DossierTimelineEvent], L: L10n) -> String {
         guard !timeline.isEmpty else { return "" }
         let items = timeline.prefix(8).map { event in
             """
@@ -547,16 +548,16 @@ public enum HTMLRenderer {
               <div class="d">\(display(event.dateLabel))</div>
               <div class="dot"></div>
               <div>
-                <div class="t">\(display(event.title))\(inferredTag(event.confidence))</div>
+                <div class="t">\(display(event.title))\(inferredTag(event.confidence, L: L))</div>
                 <div class="b">\(display(event.body))</div>
               </div>
             </div>
             """
         }.joined()
-        return "<section><h2>时间线</h2><div class=\"timeline\">\(items)</div></section>"
+        return "<section><h2>\(display(L.t("sec.timeline")))</h2><div class=\"timeline\">\(items)</div></section>"
     }
 
-    private static func renderRelatedWorks(_ items: [DossierRelatedWork], visualAssetRootURL: URL?) -> String {
+    private static func renderRelatedWorks(_ items: [DossierRelatedWork], visualAssetRootURL: URL?, L: L10n) -> String {
         guard !items.isEmpty else { return "" }
         let markup = items.prefix(6).map { item in
             let cover: String
@@ -575,10 +576,10 @@ public enum HTMLRenderer {
             </div>
             """
         }.joined()
-        return "<section><h2>延伸聆听</h2><div class=\"related\">\(markup)</div></section>"
+        return "<section><h2>\(display(L.t("sec.related")))</h2><div class=\"related\">\(markup)</div></section>"
     }
 
-    private static func renderSources(_ dossier: ResearchDossier, cachedAt: Date?) -> String {
+    private static func renderSources(_ dossier: ResearchDossier, cachedAt: Date?, L: L10n) -> String {
         let citations = dossier.citations.prefix(8).map { citation in
             let publisher = citation.publisher.trimmedNonEmpty.map { " · \(display($0))" } ?? ""
             let note = citation.note.trimmedNonEmpty.map { #"<div class="n">\#(display($0))</div>"# } ?? ""
@@ -591,31 +592,31 @@ public enum HTMLRenderer {
         }.joined()
 
         var footParts: [String] = []
-        if let cachedAt { footParts.append("整理于 \(DateFormatting.displayString(from: cachedAt))") }
+        if let cachedAt { footParts.append(display(L.t("foot.compiledAt", DateFormatting.displayString(from: cachedAt)))) }
         if let note = dossier.confidenceNote.trimmedNonEmpty { footParts.append(display(note)) }
         let foot = footParts.isEmpty ? "" : #"<div class="foot">\#(footParts.joined(separator: " · "))</div>"#
 
         let sourceMarkup = citations.isEmpty
-            ? #"<div class="foot">这次没有拿到可打开的来源。</div>"#
+            ? #"<div class="foot">\#(display(L.t("foot.noSources")))</div>"#
             : #"<div class="sources">\#(citations)</div>"#
 
         return """
         <details>
-          <summary>来源与说明（\(dossier.citations.count)）</summary>
+          <summary>\(display(L.t("sec.sources", String(dossier.citations.count))))</summary>
           \(sourceMarkup)
           \(foot)
         </details>
         """
     }
 
-    private static func renderPendingState(payload: RenderPayload) -> String {
+    private static func renderPendingState(payload: RenderPayload, L: L10n) -> String {
         let busy = payload.snapshot != nil && payload.lastError == nil
         var kv = ""
         if let snapshot = payload.snapshot {
             let rows: [(String, String?)] = [
-                ("专辑艺人", snapshot.albumArtist),
-                ("作曲", snapshot.composer),
-                ("体裁", snapshot.genre),
+                (L.t("pending.albumArtist"), snapshot.albumArtist),
+                (L.t("pending.composer"), snapshot.composer),
+                (L.t("pending.genre"), snapshot.genre),
             ]
             let cells = rows.compactMap { label, value -> String? in
                 guard let value = value?.trimmedNonEmpty else { return nil }
@@ -634,8 +635,8 @@ public enum HTMLRenderer {
 
     // MARK: - Helpers
 
-    private static func inferredTag(_ confidence: FactConfidence) -> String {
-        confidence == .inferred ? #"<span class="tag">推测</span>"# : ""
+    private static func inferredTag(_ confidence: FactConfidence, L: L10n) -> String {
+        confidence == .inferred ? #"<span class="tag">\#(display(L.t("tag.inferred")))</span>"# : ""
     }
 
     private static func artworkSource(for artworkURL: URL) -> String? {

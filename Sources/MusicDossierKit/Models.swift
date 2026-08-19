@@ -568,6 +568,7 @@ public struct RenderPayload: Sendable {
     public let artworkURL: URL?
     public let visualAssetRootURL: URL?
     public let theme: DossierTheme
+    public let language: AppLanguage
     public let statusHeadline: String
     public let statusDetail: String
     public let cachedAt: Date?
@@ -581,6 +582,7 @@ public struct RenderPayload: Sendable {
         artworkURL: URL?,
         visualAssetRootURL: URL? = nil,
         theme: DossierTheme = .day,
+        language: AppLanguage = .en,
         statusHeadline: String,
         statusDetail: String,
         cachedAt: Date? = nil,
@@ -593,6 +595,7 @@ public struct RenderPayload: Sendable {
         self.artworkURL = artworkURL
         self.visualAssetRootURL = visualAssetRootURL
         self.theme = theme
+        self.language = language
         self.statusHeadline = statusHeadline
         self.statusDetail = statusDetail
         self.cachedAt = cachedAt

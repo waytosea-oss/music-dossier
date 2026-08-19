@@ -8,6 +8,9 @@ final class AppCoordinator: ObservableObject {
     @Published var bannerText: String
     @Published var trackLine: String?
     @Published var displayTheme: DossierTheme
+    /// 界面文案（启动时按系统语言，读到配置后按配置语言）
+    @Published var strings: L10n = .system
+    private var language: AppLanguage = AppLanguage.resolve(nil)
     @Published var isPinned = false
     @Published var canOpenSources = false
     @Published var canRefresh = false
@@ -42,14 +45,15 @@ final class AppCoordinator: ObservableObject {
             dossier: nil,
             artworkURL: nil,
             theme: theme,
-            statusHeadline: "等待 Music 当前曲目",
-            statusDetail: "启动后会自动监听播放状态，并在切歌时整理背景信息。",
+            language: AppLanguage.resolve(nil),
+            statusHeadline: L10n.system.t("st.waiting.title"),
+            statusDetail: L10n.system.t("st.waiting.detail"),
             cachedAt: nil,
             isPinned: false,
             isStale: false
         )
         self.html = HTMLRenderer.render(payload: initialPayload)
-        self.bannerText = "等待 Music 当前曲目"
+        self.bannerText = L10n.system.t("st.waiting.title")
         self.trackLine = nil
         self.canOpenSources = false
         self.canRefresh = false
@@ -83,13 +87,13 @@ final class AppCoordinator: ObservableObject {
         if isPinned {
             isPinned = false
             pinnedSnapshot = nil
-            render(statusHeadline: "已恢复跟随 Music", detail: "现在会继续跟随当前播放歌曲自动刷新。")
+            render(statusHeadline: strings.t("st.unpinned.title"), detail: strings.t("st.unpinned.detail"))
             return
         }
 
         isPinned = true
         pinnedSnapshot = activeSnapshot
-        render(statusHeadline: "已固定当前歌曲", detail: "此窗口暂时不会跟随切歌。需要时可以手动刷新。")
+        render(statusHeadline: strings.t("st.pinned.title"), detail: strings.t("st.pinned.detail"))
     }
 
     func refreshCurrent() {
@@ -108,6 +112,8 @@ final class AppCoordinator: ObservableObject {
     private func initializeServices() async {
         do {
             let configuration = try AppConfiguration.load()
+            self.language = configuration.resolvedLanguage
+            self.strings = L10n(configuration.resolvedLanguage)
             let rootURL = try cacheRootURL()
             let cacheStore = try CacheStore(rootURL: rootURL)
             let musicClient = try AppleScriptMusicClient()
@@ -116,7 +122,8 @@ final class AppCoordinator: ObservableObject {
             let pipeline = DossierPipeline(
                 cacheStore: cacheStore,
                 buildDossier: buildDossier,
-                obsidianExporter: obsidianExporter
+                obsidianExporter: obsidianExporter,
+                language: configuration.resolvedLanguage
             )
 
             self.configuration = configuration
@@ -125,7 +132,7 @@ final class AppCoordinator: ObservableObject {
             self.pipeline = pipeline
             self.baseURL = rootURL
             self.canRefresh = true
-            render(statusHeadline: "服务已启动", detail: "开始监听 Music.app，并在切歌时懒加载研究档案。")
+            render(statusHeadline: strings.t("st.started"), detail: strings.t("st.waiting.detail"))
             startPolling()
 
             // 启动后在后台清一次缓存（孤儿文件、旧版超大 HTML、总量超限）
@@ -140,8 +147,8 @@ final class AppCoordinator: ObservableObject {
         } catch {
             currentError = error.localizedDescription
             render(
-                statusHeadline: "启动失败",
-                detail: "暂时无法初始化缓存或 Music 通道。",
+                statusHeadline: strings.t("st.startFail.title"),
+                detail: strings.t("st.startFail.detail"),
                 lastError: error.localizedDescription
             )
         }
@@ -176,12 +183,12 @@ final class AppCoordinator: ObservableObject {
         switch provider {
         case "claude", "claude-cli", "claude-code":
             guard hasClaude else {
-                throw MusicDossierError.invalidConfiguration("配置要求使用 Claude Code CLI，但当前机器上没有找到 claude。")
+                throw MusicDossierError.invalidConfiguration("researchProvider is claude-cli but no `claude` executable was found on this Mac.")
             }
             return makeClaude()
         case "codex-cli":
             guard hasCodex else {
-                throw MusicDossierError.invalidConfiguration("配置要求使用 Codex CLI，但当前机器上没有可用的 codex。")
+                throw MusicDossierError.invalidConfiguration("researchProvider is codex-cli but no `codex` executable was found.")
             }
             return makeCodex()
         case "openai-responses":
@@ -193,7 +200,7 @@ final class AppCoordinator: ObservableObject {
             if hasCodex { return makeCodex() }
             fallthrough
         default:
-            throw MusicDossierError.invalidConfiguration("没有可用的研究引擎：没有找到 Claude Code CLI，也没有有效 OpenAI Key 或 Codex CLI。")
+            throw MusicDossierError.invalidConfiguration("No research engine available: no Claude Code CLI, no OpenAI key, no Codex CLI.")
         }
     }
 
@@ -226,8 +233,8 @@ final class AppCoordinator: ObservableObject {
             handleObservation(observation)
         } catch {
             render(
-                statusHeadline: "Music 自动化不可用",
-                detail: "当前无法读取播放状态。",
+                statusHeadline: strings.t("st.automationUnavailable.title"),
+                detail: strings.t("st.automationUnavailable.detail"),
                 lastError: error.localizedDescription
             )
         }
@@ -235,8 +242,9 @@ final class AppCoordinator: ObservableObject {
 
     private func handleObservation(_ observation: MusicObservation) {
         if isPinned {
-            if bannerText != "已固定当前歌曲" {
-                bannerText = "已固定当前歌曲"
+            let pinnedText = strings.t("st.pinned.title")
+            if bannerText != pinnedText {
+                bannerText = pinnedText
             }
             return
         }
@@ -245,43 +253,31 @@ final class AppCoordinator: ObservableObject {
         case .notRunning:
             startFavoritesPrewarmIfNeeded()
             if hasRenderableContent {
-                render(statusHeadline: "Music 未启动", detail: "Music 已关闭，暂时保留上一首资料页。")
+                render(statusHeadline: strings.t("st.musicNotRunning.title"), detail: strings.t("st.musicNotRunning.keep"))
             } else {
                 clearCurrentContent()
-                render(statusHeadline: "Music 未启动", detail: "打开 Music 并播放歌曲后，会自动生成研究档案。")
+                render(statusHeadline: strings.t("st.musicNotRunning.title"), detail: strings.t("st.musicNotRunning.hint"))
             }
         case .noTrack:
             startFavoritesPrewarmIfNeeded()
-            let detail: String
-            switch observation.playerState {
-            case .paused:
-                detail = hasRenderableContent ? "Music 当前已暂停，暂时保留上一首资料页。" : "Music 当前已暂停，没有可读取的当前曲目。"
-            case .stopped:
-                detail = hasRenderableContent ? "Music 当前处于停止状态，暂时保留上一首资料页。" : "Music 当前处于停止状态。"
-            default:
-                detail = hasRenderableContent ? "当前暂时读不到曲目，先保留上一首资料页。" : "等待下一首曲目。"
-            }
-
-            if !hasRenderableContent {
-                clearCurrentContent()
-            }
-            render(statusHeadline: "没有可读取的曲目", detail: detail)
+            let detail = hasRenderableContent ? strings.t("st.noTrack.keep") : strings.t("st.noTrack.hint")
+            render(statusHeadline: strings.t("st.noTrack.title"), detail: detail)
         case .permissionDenied:
             if !hasRenderableContent {
                 clearCurrentContent()
             }
             render(
-                statusHeadline: "缺少自动化权限",
-                detail: hasRenderableContent ? "当前先保留已打开的资料页；请在系统设置里允许本应用控制 Music。" : "请在系统设置里允许本应用控制 Music。",
-                lastError: "没有获得 Automation 权限，无法读取当前曲目。"
+                statusHeadline: strings.t("st.noPermission.title"),
+                detail: strings.t("st.noPermission.detail"),
+                lastError: strings.t("st.noPermission.error")
             )
         case .failed(let message):
             if !hasRenderableContent {
                 clearCurrentContent()
             }
             render(
-                statusHeadline: "读取 Music 失败",
-                detail: hasRenderableContent ? "暂时保留上一首资料页，等待下次轮询恢复。" : "暂时回退到只显示已有内容。",
+                statusHeadline: strings.t("st.readFail.title"),
+                detail: strings.t("st.readFail.detail"),
                 lastError: message
             )
         case .ok:
@@ -406,10 +402,8 @@ final class AppCoordinator: ObservableObject {
         let generation = generation
 
         render(
-            statusHeadline: forceRefresh ? "正在强制刷新档案" : "正在读取本地元数据",
-            detail: forceRefresh
-                ? "忽略旧缓存，重新抓取背景和轶事；首轮联网研究通常需要 1 到 3 分钟。"
-                : "先显示歌曲卡片，再后台补全研究内容；首轮联网研究通常需要 1 到 3 分钟。"
+            statusHeadline: forceRefresh ? strings.t("st.forceRefresh.title") : strings.t("st.reading.title"),
+            detail: forceRefresh ? strings.t("st.forceRefresh.detail") : strings.t("st.reading.detail")
         )
 
         researchTask = Task { [weak self] in
@@ -446,8 +440,8 @@ final class AppCoordinator: ObservableObject {
                     }
                 }
                 self.render(
-                    statusHeadline: fresh ? "缓存偏旧，后台更新中" : "已命中缓存档案",
-                    detail: fresh ? "先显示旧缓存，再懒加载最新资料；更新过程通常需要 1 到 3 分钟。" : "本首歌已有新鲜缓存，不再重复消耗检索。",
+                    statusHeadline: fresh ? self.strings.t("st.cachedStale.title") : self.strings.t("st.cachedHit.title"),
+                    detail: fresh ? self.strings.t("st.cachedStale.detail") : self.strings.t("st.cachedHit.detail"),
                     lastError: self.currentError
                 )
             }
@@ -494,15 +488,15 @@ final class AppCoordinator: ObservableObject {
                 self.currentIsStale = false
                 self.currentError = nil
                 self.canOpenSources = !result.dossier.citations.isEmpty
-                self.render(statusHeadline: "研究档案已更新", detail: "新的背景、人物与来源已经写入缓存。")
+                self.render(statusHeadline: self.strings.t("st.updated.title"), detail: self.strings.t("st.updated.detail"))
             } catch is CancellationError {
                 return
             } catch {
                 guard self.isStillCurrent(generation: generation, snapshot: snapshot) else { return }
                 self.currentError = error.localizedDescription
                 self.render(
-                    statusHeadline: self.currentDossier == nil ? "回退到本地元数据" : "保留现有档案",
-                    detail: self.currentDossier == nil ? "网络或模型不可用时，会继续显示歌曲卡片。" : "缓存内容仍可阅读，稍后可以手动刷新。",
+                    statusHeadline: self.currentDossier == nil ? self.strings.t("st.fallback.title") : self.strings.t("st.keep.title"),
+                    detail: self.currentDossier == nil ? self.strings.t("st.fallback.detail") : self.strings.t("st.keep.detail"),
                     lastError: error.localizedDescription
                 )
             }
@@ -538,6 +532,7 @@ final class AppCoordinator: ObservableObject {
             artworkURL: currentArtworkURL,
             visualAssetRootURL: cacheStore?.visualsDirectoryURL,
             theme: displayTheme,
+            language: language,
             statusHeadline: statusHeadline,
             statusDetail: detail,
             cachedAt: currentCachedAt,
@@ -574,16 +569,16 @@ final class AppCoordinator: ObservableObject {
 
     private func headlineForCurrentState() -> String {
         if currentDossier != nil {
-            return currentIsStale ? "缓存偏旧，后台更新中" : "研究档案已就绪"
+            return currentIsStale ? strings.t("st.cachedStale.title") : strings.t("st.ready.title")
         }
-        return "正在整理本地元数据"
+        return strings.t("st.preparing.title")
     }
 
     private func detailForCurrentState() -> String {
         if currentDossier != nil {
-            return currentIsStale ? "当前先展示旧缓存，稍后会补齐最新来源。" : "本首歌的故事和时间线已经可读。"
+            return currentIsStale ? strings.t("st.staleShown.detail") : strings.t("st.ready.detail")
         }
-        return "歌曲切换后会先显示作品卡，再继续补全背景信息。"
+        return strings.t("st.preparing.detail")
     }
 
     private static func loadThemePreference() -> DossierTheme {

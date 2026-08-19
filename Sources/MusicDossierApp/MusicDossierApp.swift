@@ -223,23 +223,23 @@ struct PanelRootView: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 6) {
-                    Button(coordinator.displayTheme == .night ? "日间" : "夜间") {
+                    Button(coordinator.displayTheme == .night ? coordinator.strings.t("btn.day") : coordinator.strings.t("btn.night")) {
                         coordinator.toggleTheme()
                     }
                     .buttonStyle(HeaderActionButtonStyle(theme: coordinator.displayTheme))
 
-                    Button(coordinator.isPinned ? "取消固定" : "固定") {
+                    Button(coordinator.isPinned ? coordinator.strings.t("btn.unpin") : coordinator.strings.t("btn.pin")) {
                         coordinator.togglePin()
                     }
                     .buttonStyle(HeaderActionButtonStyle(theme: coordinator.displayTheme))
 
-                    Button("刷新") {
+                    Button(coordinator.strings.t("btn.refresh")) {
                         coordinator.refreshCurrent()
                     }
                     .buttonStyle(HeaderActionButtonStyle(theme: coordinator.displayTheme, prominent: true))
                     .disabled(!coordinator.canRefresh)
 
-                    Button("来源") {
+                    Button(coordinator.strings.t("btn.sources")) {
                         coordinator.openSources()
                     }
                     .buttonStyle(HeaderActionButtonStyle(theme: coordinator.displayTheme))

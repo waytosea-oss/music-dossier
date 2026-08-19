@@ -16,10 +16,11 @@ public enum WikipediaImageResolver {
     public static func resolve(
         title rawTitle: String,
         lang rawLang: String? = nil,
+        fallbackLang: String? = nil,
         session: URLSession = .shared
     ) async -> Resolved? {
         guard let title = rawTitle.trimmedNonEmpty else { return nil }
-        let langs = preferredLangs(rawLang)
+        let langs = preferredLangs(rawLang, fallbackLang: fallbackLang)
         for lang in langs {
             if let resolved = await fetchSummary(title: title, lang: lang, session: session) {
                 return resolved
@@ -28,16 +29,18 @@ public enum WikipediaImageResolver {
         return nil
     }
 
-    private static func preferredLangs(_ rawLang: String?) -> [String] {
-        let lang = rawLang?.trimmedNonEmpty?.lowercased()
-        switch lang {
-        case "zh", "zh-cn", "zh-hans", "zh-tw", "zh-hant":
-            return ["zh", "en"]
-        case .some(let other) where other != "en":
-            return [other, "en"]
-        default:
-            return ["en", "zh"]
+    private static func preferredLangs(_ rawLang: String?, fallbackLang: String?) -> [String] {
+        var ordered: [String] = []
+        func push(_ value: String?) {
+            guard var code = value?.trimmedNonEmpty?.lowercased() else { return }
+            if code.hasPrefix("zh") { code = "zh" }
+            code = String(code.split(separator: "-").first ?? Substring(code))
+            if !ordered.contains(code) { ordered.append(code) }
         }
+        push(rawLang)      // 模型指定的词条语言
+        push(fallbackLang) // 应用语言
+        push("en")
+        return ordered
     }
 
     private static func fetchSummary(title: String, lang: String, session: URLSession) async -> Resolved? {
