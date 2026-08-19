@@ -1,0 +1,9 @@
+.build/
+.artifacts/
+.codex/
+.swiftpm/
+*.xcodeproj
+xcuserdata/
+DerivedData/
+Scripts/local.env
+.DS_Store

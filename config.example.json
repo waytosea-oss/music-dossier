@@ -1,0 +1,16 @@
+{
+  "researchProvider": "claude-cli",
+  "claudeModel": "claude-opus-4-8",
+  "claudeEffort": "medium",
+  "cacheMaxAgeDays": 30,
+  "cacheMaxTotalMB": 300,
+  "pollIntervalSeconds": 1.5,
+  "enableFavoritesPrewarm": false,
+  "favoritesPrewarmLimit": 8,
+  "enableObsidianMirror": false,
+  "obsidianVaultPath": "",
+  "obsidianExportRelativePath": "20_Music Dossier",
+  "openAIAPIKey": "",
+  "openAIModel": "gpt-5.4",
+  "openAIBaseURL": "https://api.openai.com/v1/responses"
+}
