@@ -363,7 +363,15 @@ struct DossierWebView: NSViewRepresentable {
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         guard context.coordinator.lastHTML != html else { return }
+        let isFirstLoad = context.coordinator.lastHTML.isEmpty
         context.coordinator.lastHTML = html
+        if isFirstLoad {
+            context.coordinator.pendingScrollY = 0
+        } else {
+            webView.evaluateJavaScript("window.scrollY") { value, _ in
+                context.coordinator.pendingScrollY = (value as? Double) ?? 0
+            }
+        }
         if let baseURL, baseURL.isFileURL {
             do {
                 try context.coordinator.loadLocalHTML(html, rootURL: baseURL, into: webView)
@@ -378,7 +386,25 @@ struct DossierWebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         fileprivate var lastHTML: String = ""
+        fileprivate var pendingScrollY: Double = 0
         private let fileManager = FileManager.default
+
+        // 网页进程被系统回收/崩溃时自动重载，避免留下白屏。
+        func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+            let html = lastHTML
+            lastHTML = ""
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self, weak webView] in
+                guard let self, let webView, !html.isEmpty else { return }
+                self.lastHTML = html
+                webView.loadHTMLString(html, baseURL: nil)
+            }
+        }
+
+        // 重载后恢复滚动位置，阅读中途的刷新不再跳回顶部。
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            guard pendingScrollY > 0 else { return }
+            webView.evaluateJavaScript("window.scrollTo(0, \(pendingScrollY));", completionHandler: nil)
+        }
 
         fileprivate func loadLocalHTML(_ html: String, rootURL: URL, into webView: WKWebView) throws {
             let previewURL = rootURL.appendingFile("live-preview.html")
