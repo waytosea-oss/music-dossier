@@ -14,6 +14,7 @@ private let appLocalizedName = "听歌档案"
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    static var isTerminating = false
     private let coordinator = AppCoordinator()
     private var panelController: DossierPanelController?
 
@@ -22,6 +23,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyApplicationIconIfAvailable()
         let rootView = PanelRootView(coordinator: coordinator)
         panelController = DossierPanelController(rootView: rootView)
+        if let window = panelController?.window {
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification,
+                object: window,
+                queue: .main
+            ) { _ in
+                guard !AppDelegate.isTerminating else { return }
+                AppDelegate.isTerminating = true
+                DispatchQueue.main.async { NSApp.terminate(nil) }
+            }
+        }
         panelController?.showWindow(nil)
         panelController?.repositionWindowToVisibleArea(forceSnapToPrimaryScreen: true)
         panelController?.window?.makeKeyAndOrderFront(nil)
@@ -36,8 +48,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchInterface()
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        AppDelegate.isTerminating = true
+        return .terminateNow
+    }
+
+    // 不用系统的“最后窗口关闭即退出”检查：主窗口是 NSPanel，不被该检查计数，
+    // 右键菜单（本身是个临时窗口）一收起就会误判“无窗口”而退出应用。
+    // 改为在面板真正被用户关闭时退出（见 windowWillClose 监听）。
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
     }
 
     private func applyApplicationIconIfAvailable() {
@@ -72,6 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 final class DossierPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
 }
 
 final class DossierPanelController: NSWindowController {
