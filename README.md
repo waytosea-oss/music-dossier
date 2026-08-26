@@ -108,6 +108,33 @@ Scripts/install.sh --launcher --autolaunch
 
 本机装有已登录的 Claude Code CLI 时会优先用它（研究更深）；否则同样在「设置」里填国产模型的 Key。
 
+### 方式 C：订阅制（不想按量充值的看这里）
+
+国产模型里有两家提供**包月订阅**、且开放了 Anthropic 兼容接口——配合 Claude Code CLI，就能像 Claude 订阅一样"包月直通"本应用：
+
+| 订阅 | 大概价位 | 接口地址 |
+|---|---|---|
+| [智谱 GLM Coding Plan](https://open.bigmodel.cn) | 入门档约 ¥20/月 | `https://open.bigmodel.cn/api/anthropic` |
+| [Kimi 编码订阅](https://platform.moonshot.cn) | 以官网为准 | `https://api.moonshot.cn/anthropic` |
+
+配置三步（以智谱为例）：
+
+1. 安装 Claude Code CLI：`npm install -g @anthropic-ai/claude-code`（需要先装 [Node.js](https://nodejs.org/zh-cn)）；
+2. 订阅 Coding Plan 后拿到 Key，写进 `~/.claude/settings.json`（没有就新建）：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://open.bigmodel.cn/api/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "你的智谱Key"
+  }
+}
+```
+
+3. 重新打开 Music Dossier——它检测到本机有 `claude` 就会走这条通道，订阅额度内随便用。
+
+> 写进 `settings.json` 而不是 shell 环境变量，是因为从 Finder 双击启动的应用读不到你终端里的环境变量。若提示模型不存在，把配置里的 `claudeModel` 改成服务商的模型名（如 `glm-4.6`）。有 Claude 官方订阅的忽略本节：`claude` → `/login` 即可。
+
 ## 三、首次启动必读
 
 **1. 「是否允许控制 Music」**：首次启动 macOS 会弹自动化权限，点**允许**。这是它读取当前曲目与封面的唯一通道。误点了拒绝：系统设置 → 隐私与安全性 → 自动化 → Music Dossier → 勾上 Music。
