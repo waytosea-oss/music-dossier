@@ -165,6 +165,8 @@ public actor ClaudeCLIResearchClient {
         - citations: at least 4 real, openable URLs (include at least one Wikipedia article); note = one sentence on what this source supports.
         - headline must equal the local track title exactly.
         - Typography: \(punctuation)
+        
+        Copyright hard rule: never output song lyrics verbatim in any field — not even one line; paraphrase themes only.
         """
     }
 

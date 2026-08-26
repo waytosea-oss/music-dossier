@@ -91,6 +91,7 @@ public actor ChatCompletionsResearchClient {
         4. story 为编辑手记：2-3 段、有细节有观点、给普通听众看。listeningNotes 2-4 条，讲耳朵该注意什么。
         5. creators 里 wikipediaTitle 填资料包对应的条目名（有就填，页面靠它抓人物照片）；visuals 同理，imageURL 一律留空字符串。
         6. citations 至少包含资料包里实际用到的 URL；没有可靠来源就少写内容。
+        7. 版权红线：任何字段都绝对不要出现歌词原文（连一句都不行）；描述歌词只能用自己的话概述主题。
         """
 
         let trackSummary = """
