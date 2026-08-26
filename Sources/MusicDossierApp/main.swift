@@ -14,6 +14,10 @@ let appMenu = NSMenu()
 appMenuItem.submenu = appMenu
 appMenu.addItem(withTitle: "About", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
 appMenu.addItem(.separator())
+let settingsItem = NSMenuItem(title: "设置…", action: #selector(AppDelegate.showSettings), keyEquivalent: ",")
+settingsItem.target = delegate
+appMenu.addItem(settingsItem)
+appMenu.addItem(.separator())
 appMenu.addItem(withTitle: "Hide", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
 appMenu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 

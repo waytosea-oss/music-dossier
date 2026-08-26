@@ -7,6 +7,11 @@ public struct AppConfiguration: Codable, Sendable {
     public let claudeModel: String?
     public let claudeExecutablePath: String?
     public let claudeEffort: String?
+    /// 通用 Chat Completions 引擎（DeepSeek/千问/Kimi/GLM/自定义）
+    public let apiProvider: String?
+    public let apiKey: String?
+    public let apiModel: String?
+    public let apiBaseURL: String?
     public let openAIAPIKey: String?
     public let openAIModel: String
     public let openAIBaseURL: String
@@ -51,6 +56,10 @@ public struct AppConfiguration: Codable, Sendable {
             claudeModel: envString("MUSIC_DOSSIER_CLAUDE_MODEL") ?? fileConfig?.claudeModel,
             claudeExecutablePath: envString("MUSIC_DOSSIER_CLAUDE_PATH") ?? fileConfig?.claudeExecutablePath,
             claudeEffort: envString("MUSIC_DOSSIER_CLAUDE_EFFORT") ?? fileConfig?.claudeEffort,
+            apiProvider: envString("MUSIC_DOSSIER_API_PROVIDER") ?? fileConfig?.apiProvider,
+            apiKey: envString("MUSIC_DOSSIER_API_KEY") ?? fileConfig?.apiKey,
+            apiModel: envString("MUSIC_DOSSIER_API_MODEL") ?? fileConfig?.apiModel,
+            apiBaseURL: envString("MUSIC_DOSSIER_API_BASE_URL") ?? fileConfig?.apiBaseURL,
             openAIAPIKey: envString("OPENAI_API_KEY") ?? fileConfig?.openAIAPIKey,
             openAIModel: envString("OPENAI_MODEL") ?? fileConfig?.openAIModel ?? "gpt-5.4",
             openAIBaseURL: envString("OPENAI_RESPONSES_URL") ?? fileConfig?.openAIBaseURL ?? "https://api.openai.com/v1/responses",
@@ -64,6 +73,35 @@ public struct AppConfiguration: Codable, Sendable {
             obsidianVaultPath: envString("MUSIC_DOSSIER_OBSIDIAN_VAULT") ?? fileConfig?.obsidianVaultPath,
             obsidianExportRelativePath: envString("MUSIC_DOSSIER_OBSIDIAN_EXPORT_PATH") ?? fileConfig?.obsidianExportRelativePath ?? "20_Music Dossier"
         )
+    }
+
+    /// 把「设置」窗里的字段合并写回 config.json（保留文件里其他手工配置）。
+    public static func saveUserSettings(
+        provider: String?, key: String?, model: String?, baseURL: String?,
+        language: String?, fileManager: FileManager = .default
+    ) throws {
+        let dir = fileManager.homeDirectoryForCurrentUser
+            .appendingDirectory("Library")
+            .appendingDirectory("Application Support")
+            .appendingDirectory("MusicDossier")
+        try fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingFile("config.json")
+        var obj: [String: Any] = [:]
+        if let data = try? Data(contentsOf: url),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            obj = existing
+        }
+        func put(_ k: String, _ v: String?) {
+            if let v = v?.trimmedNonEmpty { obj[k] = v } else { obj.removeValue(forKey: k) }
+        }
+        put("apiProvider", provider)
+        put("apiKey", key)
+        put("apiModel", model)
+        put("apiBaseURL", baseURL)
+        put("language", language)
+        let data = try JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: url, options: [.atomic])
+        try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     /// 图片 + HTML 缓存总量上限，默认 300MB。

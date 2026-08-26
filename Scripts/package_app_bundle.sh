@@ -13,10 +13,14 @@ RESOURCES_DIR="$TARGET_APP/Contents/Resources"
 cd "$REPO_ROOT"
 mkdir -p "$SCRATCH_PATH"
 echo "→ swift build ($EXECUTABLE_NAME) …"
-swift build -c release --scratch-path "$SCRATCH_PATH" --product "$EXECUTABLE_NAME" >/tmp/music_dossier_build.log 2>&1 || {
+ARCH_FLAGS=()
+if [[ "${MUSIC_DOSSIER_UNIVERSAL:-0}" == "1" ]]; then
+  ARCH_FLAGS=(--arch arm64 --arch x86_64)
+fi
+swift build -c release --scratch-path "$SCRATCH_PATH" "${ARCH_FLAGS[@]}" --product "$EXECUTABLE_NAME" >/tmp/music_dossier_build.log 2>&1 || {
   echo "构建失败，日志：/tmp/music_dossier_build.log" >&2; tail -20 /tmp/music_dossier_build.log >&2; exit 1; }
 
-BUILD_DIR="$(swift build -c release --scratch-path "$SCRATCH_PATH" --show-bin-path)"
+BUILD_DIR="$(swift build -c release --scratch-path "$SCRATCH_PATH" "${ARCH_FLAGS[@]}" --show-bin-path)"
 BINARY_PATH="$BUILD_DIR/$EXECUTABLE_NAME"
 [[ -x "$BINARY_PATH" ]] || { echo "找不到产物 $BINARY_PATH" >&2; exit 1; }
 

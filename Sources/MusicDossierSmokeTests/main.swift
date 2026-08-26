@@ -3,10 +3,34 @@ import MusicDossierKit
 
 @main
 enum MusicDossierSmokeTests {
-    static func main() throws {
+    static func main() async throws {
         try verifyTrackKeyFallback()
         try verifyRendererSections()
         print("MusicDossier smoke tests passed.")
+        if ProcessInfo.processInfo.environment["MUSIC_DOSSIER_TEST_API"] == "1" {
+            try await runLiveAPITest()
+        }
+    }
+
+    // LIVE API TEST：设置 MUSIC_DOSSIER_TEST_API=1 时，用当前配置真调一次 Chat Completions 引擎。
+    private static func runLiveAPITest() async throws {
+        let config = try AppConfiguration.load()
+        let client = ChatCompletionsResearchClient(configuration: config)
+        if let err = await client.testConnection() {
+            print("TEST-CONNECTION FAILED: \(err)")
+            exit(2)
+        }
+        print("TEST-CONNECTION OK")
+        let snapshot = TrackSnapshot(
+            persistentId: "TEST", databaseId: nil,
+            title: "Clair de lune", artist: "Claude Debussy", album: "Suite bergamasque",
+            albumArtist: nil, composer: "Claude Debussy", durationSeconds: 300,
+            genre: "Classical", year: 1905, releaseDate: nil, lyrics: nil,
+            artworkData: nil, playerState: .playing, kind: nil, comment: nil, cloudStatus: nil
+        )
+        let dossier = try await client.buildDossier(for: snapshot)
+        print("DOSSIER OK: story=\(dossier.story?.count ?? 0)ch notes=\(dossier.listeningNotes.count) creators=\(dossier.creators.count) citations=\(dossier.citations.count)")
+        print("oneLiner: \(dossier.oneLiner)")
     }
 
     private static func verifyTrackKeyFallback() throws {
@@ -123,3 +147,5 @@ enum MusicDossierSmokeTests {
         }
     }
 }
+
+

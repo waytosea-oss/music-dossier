@@ -46,6 +46,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         launchInterface()
+        NotificationCenter.default.addObserver(forName: .musicDossierNeedsSetup, object: nil, queue: .main) { _ in
+            Task { @MainActor in SettingsWindowController.shared.show() }
+        }
+        NotificationCenter.default.addObserver(forName: .musicDossierSettingsSaved, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.coordinator.bootstrap() }
+        }
+    }
+
+    @objc func showSettings() {
+        SettingsWindowController.shared.show()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

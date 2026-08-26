@@ -146,11 +146,17 @@ final class AppCoordinator: ObservableObject {
             }
         } catch {
             currentError = error.localizedDescription
+            let isSetupIssue = (error as? MusicDossierError).map {
+                if case .needsSetup = $0 { return true } else { return false }
+            } ?? false
             render(
-                statusHeadline: strings.t("st.startFail.title"),
-                detail: strings.t("st.startFail.detail"),
+                statusHeadline: isSetupIssue ? "欢迎使用 · 还差一步" : strings.t("st.startFail.title"),
+                detail: isSetupIssue ? "请在弹出的设置窗里选择 AI 服务商并粘贴 API Key。" : strings.t("st.startFail.detail"),
                 lastError: error.localizedDescription
             )
+            if isSetupIssue {
+                NotificationCenter.default.post(name: .musicDossierNeedsSetup, object: nil)
+            }
         }
     }
 
@@ -179,6 +185,11 @@ final class AppCoordinator: ObservableObject {
             let client = OpenAIResearchClient(configuration: configuration)
             return { snapshot in try await client.buildDossier(for: snapshot) }
         }
+        let chatClient = ChatCompletionsResearchClient(configuration: configuration)
+        func makeChatAPI() -> @Sendable (TrackSnapshot) async throws -> ResearchDossier {
+            { snapshot in try await chatClient.buildDossier(for: snapshot) }
+        }
+        let hasChatAPI = configuration.apiKey?.trimmedNonEmpty != nil
 
         switch provider {
         case "claude", "claude-cli", "claude-code":
@@ -193,14 +204,20 @@ final class AppCoordinator: ObservableObject {
             return makeCodex()
         case "openai-responses":
             return makeOpenAI()
+        case "api", "chat-api", "deepseek", "qwen", "kimi", "glm":
+            guard hasChatAPI else {
+                throw MusicDossierError.needsSetup
+            }
+            return makeChatAPI()
         case "auto":
-            // 优先级：Claude CLI > OpenAI Key > Codex CLI
+            // 优先级：Claude CLI > 通用 API（国产模型）> OpenAI Key > Codex CLI
             if hasClaude { return makeClaude() }
+            if hasChatAPI { return makeChatAPI() }
             if hasUsableAPIKey { return makeOpenAI() }
             if hasCodex { return makeCodex() }
             fallthrough
         default:
-            throw MusicDossierError.invalidConfiguration("No research engine available: no Claude Code CLI, no OpenAI key, no Codex CLI.")
+            throw MusicDossierError.needsSetup
         }
     }
 

@@ -45,10 +45,9 @@
 | 条件 | 要求 | 说明 |
 |---|---|---|
 | 操作系统 | **macOS 14 (Sonoma) 及以上** | Apple Silicon 与 Intel 都行（从源码编译） |
-| 编译工具 | Xcode 15+ 或 Command Line Tools | `xcode-select --install` 即可，Swift 6 |
+| 机型 | 一键安装需 **Apple Silicon（M 系列）**| Intel Mac 走源码安装（需 Command Line Tools） |
 | 播放器 | **Apple Music（Music.app）** | 本地曲库或流媒体都可以；Spotify 等暂不支持 |
-| 研究引擎 | 本机**已登录的 Claude Code CLI**（`claude`） | 生成档案靠它。终端里 `claude` → `/login` 一次即可 |
-| 费用 | 每首歌约 2 分钟、约 $0.2–0.5 | 默认 `claude-opus-4-8` + 联网搜索；查过的歌不再花钱 |
+| 写作引擎 | **二选一**：① 国产大模型 API Key（DeepSeek / 通义千问 / Kimi / 智谱，推荐小白）② 本机已登录的 Claude Code CLI | ① 在应用「设置」里粘贴 Key 即可，约 20 秒出稿，一首几分钱；② 联网深度研究，约 2 分钟、$0.2–0.5 一首 |
 | 网络 | 能访问 Anthropic、Wikipedia、iTunes | 图片来自 Wikimedia Commons 与 iTunes Search API |
 
 **隐私**：没有服务器、不用注册；档案与图片都存在 `~/Library/Application Support/MusicDossier/`；发出去的只有曲名 / 艺人 / 专辑 / 时长这几个字。
@@ -75,7 +74,27 @@
 
 查实与推断分开标：没把握的条目会带一个小小的「推测」标签。
 
-## 二、安装（3 步）
+## 二、安装
+
+### 方式 A：一行命令（推荐，小白友好）
+
+打开「终端」（启动台搜 Terminal），把下面整行粘贴进去，回车：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/waytosea-oss/music-dossier/main/install.sh | bash
+```
+
+脚本会自动下载最新版、装进「应用程序」并打开。**不需要装任何开发工具。**（仅支持 Apple Silicon 的 Mac）
+
+装好后应用会弹出「设置」窗：
+
+1. 服务商选 **DeepSeek**（最便宜）或通义千问 / Kimi / 智谱；
+2. 点「还没有 Key？」链接去注册，复制 API Key 粘贴回来；
+3. 点「测试连接」看到绿色的"连接成功"，点「保存」。
+
+然后打开 Apple Music 放一首歌，小窗就开始写档案了。
+
+### 方式 B：源码安装（开发者 / Intel Mac / 想用 Claude 引擎）
 
 ```bash
 git clone https://github.com/waytosea-oss/music-dossier.git
@@ -83,11 +102,11 @@ cd music-dossier
 Scripts/install.sh --launcher --autolaunch
 ```
 
-1. 脚本会检查 `swift` 与 `claude`，编译并打包到 `/Applications/Music Dossier.app`，写入默认配置；
+1. 脚本会检查 `swift`，编译并打包到 `/Applications/Music Dossier.app`；
 2. `--launcher`（可省）：桌面放一个「启动 Music Dossier」图标；
 3. `--autolaunch`（可省）：打开 Music 时自动出现小窗，每个 Music 会话只弹一次，手动关掉不会反复弹。卸载：`Scripts/install_autolaunch.sh --remove`。
 
-然后 `open "/Applications/Music Dossier.app"`，播一首歌，等两分钟。
+本机装有已登录的 Claude Code CLI 时会优先用它（研究更深）；否则同样在「设置」里填国产模型的 Key。
 
 ## 三、首次启动必读
 
@@ -95,11 +114,7 @@ Scripts/install.sh --launcher --autolaunch
 
 **2. Gatekeeper**：本 App 本地临时签名、未公证。若提示"无法打开"：系统设置 → 隐私与安全性 → 「仍要打开」；或 `xattr -dr com.apple.quarantine "/Applications/Music Dossier.app"`。
 
-**3. Claude Code 登录**：小窗能启动但一直"正在整理本地元数据"，多半是 `claude` 没登录。终端里：
-
-```bash
-claude        # 进入后输入 /login，浏览器完成授权，然后 /exit
-```
+**3. 写作引擎**：没配引擎时应用会自动弹「设置」窗（菜单栏 ⌘, 也能打开）：选服务商 → 贴 Key → 测试 → 保存，全程不用碰配置文件。用 Claude Code 的：终端里 `claude` → `/login` 登录一次即可，应用会自动检测。
 
 **4. 想改名**（比如叫 "Tilo's Music Dossier"）：在 `Scripts/local.env` 写两行再重新 `Scripts/install.sh`：
 
@@ -126,7 +141,7 @@ MUSIC_DOSSIER_BUNDLE_ID="com.yourname.musicdossier"
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `language` | `auto` | 档案与界面语言：`auto`（跟随系统）/ `en` / `zh-Hans` / `zh-Hant` / `ja` / `ko` / `es` / `fr` / `de` / `pt` / `ru` / `it` |
-| `researchProvider` | `claude-cli` | 研究引擎：`claude-cli`（推荐）/ `auto` / `openai-responses` / `codex-cli` |
+| `researchProvider` | `auto` | `auto`（Claude CLI > 国产 API > OpenAI > Codex）/ `claude-cli` / `api` / `openai-responses` / `codex-cli` |
 | `claudeModel` | `claude-opus-4-8` | 传给 `claude --model` |
 | `claudeEffort` | `medium` | `low` 更省，`high` 更细 |
 | `cacheMaxAgeDays` | 30 | 档案多久算过期 |
@@ -134,7 +149,8 @@ MUSIC_DOSSIER_BUNDLE_ID="com.yourname.musicdossier"
 | `pollIntervalSeconds` | 1.5 | 多久问一次 Music 在放什么 |
 | `enableObsidianMirror` / `obsidianVaultPath` / `obsidianExportRelativePath` | 关 | 打开并填库路径后，每首歌写一份 Markdown 到 `<库>/20_Music Dossier/` |
 | `enableFavoritesPrewarm` / `favoritesPrewarmLimit` | 关 | 启动后在后台预研究收藏曲目（会花钱，默认关） |
-| `openAIAPIKey` / `openAIModel` / `openAIBaseURL` | 空 | 备选引擎，不用 Claude 时才填 |
+| `apiProvider` / `apiKey` / `apiModel` / `apiBaseURL` | 空 | 国产/通用模型引擎（`deepseek` / `qwen` / `kimi` / `glm` / `custom`）。**推荐用应用内「设置」窗填，不必手改** |
+| `openAIAPIKey` / `openAIModel` / `openAIBaseURL` | 空 | OpenAI Responses 备选引擎 |
 
 同名环境变量可覆盖（`MUSIC_DOSSIER_CLAUDE_MODEL`、`MUSIC_DOSSIER_CACHE_MAX_MB`、`MUSIC_DOSSIER_OBSIDIAN_VAULT` …）。
 

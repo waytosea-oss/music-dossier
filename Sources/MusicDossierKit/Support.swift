@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 
 public enum MusicDossierError: LocalizedError, Sendable {
+    case needsSetup
     case missingAPIKey
     case invalidConfiguration(String)
     case network(String)
@@ -13,6 +14,8 @@ public enum MusicDossierError: LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
+        case .needsSetup:
+            return "还没有可用的写作引擎。请打开「设置」，选择一个服务商（如 DeepSeek）并粘贴 API Key。"
         case .missingAPIKey:
             return "缺少 OpenAI API Key。"
         case .invalidConfiguration(let message):
