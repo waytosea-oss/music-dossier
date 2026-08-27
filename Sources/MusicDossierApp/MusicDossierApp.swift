@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         launchInterface()
+        maybeOpenSettingsForDemo()
         NotificationCenter.default.addObserver(forName: .musicDossierNeedsSetup, object: nil, queue: .main) { _ in
             Task { @MainActor in SettingsWindowController.shared.show() }
         }
@@ -62,6 +63,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showSettings() {
         SettingsWindowController.shared.show()
+    }
+
+    // 教程截图用：MUSIC_DOSSIER_DEMO_OPEN_SETTINGS=1 时启动即打开设置窗
+    func maybeOpenSettingsForDemo() {
+        if ProcessInfo.processInfo.environment["MUSIC_DOSSIER_DEMO_OPEN_SETTINGS"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                SettingsWindowController.shared.show()
+            }
+        }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

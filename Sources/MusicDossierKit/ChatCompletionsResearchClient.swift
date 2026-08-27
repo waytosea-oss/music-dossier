@@ -130,6 +130,7 @@ public actor ChatCompletionsResearchClient {
 
         // 流式接收：长生成期间保持数据流动，避免网关/代理掐断空闲连接
         body["stream"] = true
+        body["stream_options"] = ["include_usage": true]
 
         guard let url = URL(string: baseURL) else {
             throw MusicDossierError.invalidConfiguration("API 地址无效：\(baseURL)")
@@ -169,19 +170,146 @@ public actor ChatCompletionsResearchClient {
             if let piece = delta["content"] as? String {
                 content += piece
             }
+            if let usage = chunk["usage"] as? [String: Any],
+               let total = usage["total_tokens"] as? Int, total > 0 {
+                Self.logUsage(usage, model: model)
+            }
         }
         guard content.trimmedNonEmpty != nil else {
             throw MusicDossierError.decoding("API 没有返回内容")
         }
 
-        let cleaned = Self.stripCodeFence(content)
-        guard let jsonData = Self.extractJSONObject(from: cleaned)?.data(using: .utf8) else {
-            throw MusicDossierError.decoding("模型输出不是 JSON：\(String(cleaned.prefix(300)))")
-        }
         do {
-            return try JSONCoding.makeDecoder().decode(ResearchDossier.self, from: jsonData)
+            return try Self.decodeDossier(from: content)
         } catch {
-            throw MusicDossierError.decoding("档案解码失败：\(error.localizedDescription)")
+            Self.dumpRawOutput(content, error: error)
+            // 自动重试一次：把上次的问题反馈给模型
+            let retryPrompt = userPrompt + "\n\n（你上一次的输出不是合法 JSON，解析报错：\(error.localizedDescription)。请重新输出：只输出一个严格合法的 JSON 对象，字符串内的换行必须写成 \\n，不要输出任何 JSON 之外的文字。）"
+            let retryContent = try await streamOnce(baseURL: baseURL, key: key, model: model,
+                                                    systemPrompt: systemPrompt, userPrompt: retryPrompt,
+                                                    jsonMode: Self.preset(id: configuration.apiProvider)?.supportsJSONMode == true)
+            do {
+                return try Self.decodeDossier(from: retryContent)
+            } catch {
+                Self.dumpRawOutput(retryContent, error: error)
+                throw MusicDossierError.decoding("档案解码失败（重试后仍失败）：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// 单次流式调用，返回拼好的 content。
+    private func streamOnce(baseURL: String, key: String, model: String,
+                            systemPrompt: String, userPrompt: String, jsonMode: Bool) async throws -> String {
+        var body: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": userPrompt],
+            ],
+            "temperature": 0.3,
+            "max_tokens": 20000,
+            "stream": true,
+            "stream_options": ["include_usage": true],
+        ]
+        if jsonMode { body["response_format"] = ["type": "json_object"] }
+        guard let url = URL(string: baseURL) else { throw MusicDossierError.invalidConfiguration("API 地址无效") }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 900
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
+            throw MusicDossierError.network("重试请求失败")
+        }
+        var content = ""
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            if payload == "[DONE]" { break }
+            guard let chunkData = payload.data(using: .utf8),
+                  let chunk = try? JSONSerialization.jsonObject(with: chunkData) as? [String: Any] else { continue }
+            if let choices = chunk["choices"] as? [[String: Any]],
+               let delta = choices.first?["delta"] as? [String: Any],
+               let piece = delta["content"] as? String { content += piece }
+            if let usage = chunk["usage"] as? [String: Any],
+               let total = usage["total_tokens"] as? Int, total > 0 { Self.logUsage(usage, model: model) }
+        }
+        return content
+    }
+
+    /// 解码：剥代码块 → 截取 JSON 对象 → 清洗常见毛病（裸控制字符、尾逗号）→ 严格解码
+    static func decodeDossier(from content: String) throws -> ResearchDossier {
+        let cleaned = stripCodeFence(content)
+        guard var json = extractJSONObject(from: cleaned) else {
+            throw MusicDossierError.decoding("模型输出不是 JSON：\(String(cleaned.prefix(200)))")
+        }
+        if let data = json.data(using: .utf8),
+           let dossier = try? JSONCoding.makeDecoder().decode(ResearchDossier.self, from: data) {
+            return dossier
+        }
+        // 清洗一：字符串字面量里的裸换行/裸制表符转义（思考型模型常见错误）
+        json = sanitizeBareControlCharacters(in: json)
+        // 清洗二：尾逗号
+        json = json.replacingOccurrences(of: #",\s*([}\]])"#, with: "$1", options: .regularExpression)
+        guard let data = json.data(using: .utf8) else {
+            throw MusicDossierError.decoding("JSON 不是 UTF-8")
+        }
+        return try JSONCoding.makeDecoder().decode(ResearchDossier.self, from: data)
+    }
+
+    /// 把 JSON 字符串字面量内部的裸 \n \r \t 转成合法转义。
+    static func sanitizeBareControlCharacters(in json: String) -> String {
+        var out = String()
+        out.reserveCapacity(json.count)
+        var inString = false
+        var escaped = false
+        for ch in json {
+            if inString {
+                if escaped { out.append(ch); escaped = false; continue }
+                switch ch {
+                case "\\": out.append(ch); escaped = true
+                case "\"": out.append(ch); inString = false
+                case "\n": out.append("\\n")
+                case "\r": out.append("\\r")
+                case "\t": out.append("\\t")
+                default: out.append(ch)
+                }
+            } else {
+                if ch == "\"" { inString = true }
+                out.append(ch)
+            }
+        }
+        return out
+    }
+
+    private static func supportDirectory() -> URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingDirectory("Library").appendingDirectory("Application Support").appendingDirectory("MusicDossier")
+    }
+
+    static func dumpRawOutput(_ content: String, error: Error) {
+        let url = supportDirectory().appendingFile("last-api-output.txt")
+        let text = "error: \(error.localizedDescription)\n---\n\(content)"
+        try? text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    static func logUsage(_ usage: [String: Any], model: String) {
+        let url = supportDirectory().appendingFile("api-usage.jsonl")
+        var entry = usage
+        entry["model"] = model
+        entry["at"] = ISO8601DateFormatter().string(from: Date())
+        guard let data = try? JSONSerialization.data(withJSONObject: entry),
+              let line = String(data: data, encoding: .utf8) else { return }
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write((line + "\n").data(using: .utf8)!)
+            try? handle.close()
+        } else {
+            try? (line + "\n").write(to: url, atomically: true, encoding: .utf8)
         }
     }
 

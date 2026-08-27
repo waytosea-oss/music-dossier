@@ -29,7 +29,9 @@ struct SettingsView: View {
         let config = try? AppConfiguration.load()
         let pid = config?.apiProvider?.trimmedNonEmpty ?? "deepseek"
         _providerID = State(initialValue: pid)
-        _apiKey = State(initialValue: config?.apiKey ?? "")
+        // 教程截图用：显示打码 Key
+        let env = ProcessInfo.processInfo.environment
+        _apiKey = State(initialValue: env["MUSIC_DOSSIER_DEMO_MASKED_KEY"] ?? config?.apiKey ?? "")
         _model = State(initialValue: config?.apiModel ?? "")
         _baseURL = State(initialValue: config?.apiBaseURL ?? "")
         _languageID = State(initialValue: config?.language?.trimmedNonEmpty ?? "auto")
@@ -138,6 +140,11 @@ struct SettingsView: View {
         .padding(22)
         .frame(width: 470)
         .onChange(of: providerID) { _ in testResult = nil; saved = false }
+        .onAppear {
+            if ProcessInfo.processInfo.environment["MUSIC_DOSSIER_DEMO_AUTOTEST"] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { runTest() }
+            }
+        }
     }
 
     private func currentConfigForTest() -> AppConfiguration? {
