@@ -13,6 +13,8 @@ final class AppCoordinator: ObservableObject {
     private var language: AppLanguage = AppLanguage.resolve(nil)
     @Published var isPinned = false
     @Published var canOpenSources = false
+    /// 引擎未配置且发生在观察者注册之前时置位，AppDelegate 启动完成后补弹设置窗。
+    private(set) var needsSetupPending = false
     @Published var canRefresh = false
 
     var baseURL: URL?
@@ -155,6 +157,7 @@ final class AppCoordinator: ObservableObject {
                 lastError: error.localizedDescription
             )
             if isSetupIssue {
+                needsSetupPending = true
                 NotificationCenter.default.post(name: .musicDossierNeedsSetup, object: nil)
             }
         }

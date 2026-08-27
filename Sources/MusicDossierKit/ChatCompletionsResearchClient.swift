@@ -122,11 +122,14 @@ public actor ChatCompletionsResearchClient {
                 ["role": "user", "content": userPrompt],
             ],
             "temperature": 0.4,
-            "max_tokens": 6000,
+            "max_tokens": 20000,
         ]
         if Self.preset(id: configuration.apiProvider)?.supportsJSONMode == true {
             body["response_format"] = ["type": "json_object"]
         }
+
+        // 流式接收：长生成期间保持数据流动，避免网关/代理掐断空闲连接
+        body["stream"] = true
 
         guard let url = URL(string: baseURL) else {
             throw MusicDossierError.invalidConfiguration("API 地址无效：\(baseURL)")
@@ -135,23 +138,39 @@ public actor ChatCompletionsResearchClient {
         request.httpMethod = "POST"
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 180
+        request.timeoutInterval = 900
 
-        let (data, response) = try await session.data(for: request)
+        let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw MusicDossierError.network("API 响应不可识别")
         }
         guard (200 ..< 300).contains(http.statusCode) else {
-            let text = String(data: data, encoding: .utf8) ?? ""
+            var text = ""
+            for try await line in bytes.lines {
+                text += line
+                if text.count > 500 { break }
+            }
             throw MusicDossierError.network(Self.friendlyHTTPError(status: http.statusCode, body: text))
         }
 
-        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = root["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = (message["content"] as? String)?.trimmedNonEmpty
-        else {
+        var content = ""
+        for try await line in bytes.lines {
+            try Task.checkCancellation()
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            if payload == "[DONE]" { break }
+            guard let chunkData = payload.data(using: .utf8),
+                  let chunk = try? JSONSerialization.jsonObject(with: chunkData) as? [String: Any],
+                  let choices = chunk["choices"] as? [[String: Any]],
+                  let delta = choices.first?["delta"] as? [String: Any]
+            else { continue }
+            if let piece = delta["content"] as? String {
+                content += piece
+            }
+        }
+        guard content.trimmedNonEmpty != nil else {
             throw MusicDossierError.decoding("API 没有返回内容")
         }
 
@@ -178,12 +197,15 @@ public actor ChatCompletionsResearchClient {
         request.httpBody = try? JSONSerialization.data(withJSONObject: [
             "model": model,
             "messages": [["role": "user", "content": "回复：OK"]],
-            "max_tokens": 8,
+            "max_tokens": 512,
         ])
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { return "响应不可识别" }
-            if (200 ..< 300).contains(http.statusCode) { return nil }
+            if (200 ..< 300).contains(http.statusCode) {
+                // 有的思考型模型在极小额度下 content 为空但 HTTP 200——只要 200 即视为连通
+                return nil
+            }
             return Self.friendlyHTTPError(status: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         } catch {
             return "网络错误：\(error.localizedDescription)"

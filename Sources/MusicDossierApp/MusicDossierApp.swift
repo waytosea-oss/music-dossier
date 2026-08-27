@@ -52,6 +52,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: .musicDossierSettingsSaved, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.coordinator.bootstrap() }
         }
+        // 兜底：报错发生在观察者注册之前（首启竞态）时，这里补弹设置窗
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            if self?.coordinator.needsSetupPending == true {
+                SettingsWindowController.shared.show()
+            }
+        }
     }
 
     @objc func showSettings() {
