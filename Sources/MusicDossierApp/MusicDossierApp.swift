@@ -286,6 +286,13 @@ struct PanelRootView: View {
                     .buttonStyle(HeaderActionButtonStyle(theme: coordinator.displayTheme, prominent: true))
                     .disabled(!coordinator.canRefresh)
 
+                    Button("复制") {
+                        coordinator.copyArticleForWeChat()
+                    }
+                    .buttonStyle(HeaderActionButtonStyle(theme: coordinator.displayTheme))
+                    .disabled(!coordinator.canOpenSources)
+                    .help("把整篇档案复制成公众号可粘贴的格式")
+
                     Button(coordinator.strings.t("btn.sources")) {
                         coordinator.openSources()
                     }

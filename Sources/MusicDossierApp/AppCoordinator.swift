@@ -103,6 +103,24 @@ final class AppCoordinator: ObservableObject {
         launchTrackTask(for: snapshot, forceRefresh: true)
     }
 
+    /// 一键复制当前档案为公众号可粘贴的富文本
+    func copyArticleForWeChat() {
+        guard let dossier = currentDossier, let snapshot = pinnedSnapshot ?? currentSnapshot,
+              let cacheStore else { return }
+        let html = WeChatExporter.render(
+            snapshot: snapshot,
+            dossier: dossier,
+            artworkURL: cacheStore.artworkURL(for: snapshot.trackKey),
+            visualAssetRootURL: cacheStore.visualsDirectoryURL
+        )
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.declareTypes([.html, .string], owner: nil)
+        pb.setString(html, forType: .html)
+        pb.setString("\(dossier.headline)\n\(dossier.oneLiner)", forType: .string)
+        bannerText = "已复制，去公众号编辑器粘贴（⌘V）✓"
+    }
+
     func openSources() {
         guard let dossier = currentDossier else { return }
         dossier.citations.prefix(5).forEach { citation in

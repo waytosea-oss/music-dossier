@@ -10,6 +10,33 @@ enum MusicDossierSmokeTests {
         if ProcessInfo.processInfo.environment["MUSIC_DOSSIER_TEST_API"] == "1" {
             try await runLiveAPITest()
         }
+        if ProcessInfo.processInfo.environment["MUSIC_DOSSIER_TEST_WECHAT"] == "1" {
+            try runWeChatExportTest()
+        }
+    }
+
+    /// 用缓存里最新一份档案跑公众号导出，写到 /tmp/wechat-export.html
+    private static func runWeChatExportTest() throws {
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appendingDirectory("Library").appendingDirectory("Application Support").appendingDirectory("MusicDossier")
+        let store = try CacheStore(rootURL: root)
+        guard let (key, cached) = try store.loadMostRecentDossier() else {
+            print("WECHAT TEST: no cached dossier"); return
+        }
+        let snapshot = TrackSnapshot(
+            persistentId: nil, databaseId: nil,
+            title: cached.dossier.headline, artist: cached.dossier.album?.artist, album: cached.dossier.album?.title,
+            albumArtist: nil, composer: nil, durationSeconds: nil, genre: nil,
+            year: Int(cached.dossier.album?.year ?? ""), releaseDate: nil, lyrics: nil, artworkData: nil,
+            playerState: .stopped, kind: nil, comment: nil, cloudStatus: nil
+        )
+        let html = WeChatExporter.render(
+            snapshot: snapshot, dossier: cached.dossier,
+            artworkURL: store.artworkURL(for: key),
+            visualAssetRootURL: store.visualsDirectoryURL
+        )
+        try html.write(toFile: "/tmp/wechat-export.html", atomically: true, encoding: .utf8)
+        print("WECHAT TEST: exported \(html.count) chars -> /tmp/wechat-export.html")
     }
 
     // LIVE API TEST：设置 MUSIC_DOSSIER_TEST_API=1 时，用当前配置真调一次 Chat Completions 引擎。

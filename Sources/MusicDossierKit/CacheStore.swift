@@ -46,6 +46,16 @@ public final class CacheStore: @unchecked Sendable {
         }
     }
 
+    /// 取全库最新一份档案（导出测试等用）。
+    public func loadMostRecentDossier() throws -> (trackKey: String, cached: CachedDossier)? {
+        guard let statement = try prepare("SELECT track_key FROM dossier_cache ORDER BY updated_at DESC LIMIT 1;") else { return nil }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        let key = try readColumnText(statement, index: 0)
+        guard let cached = try loadLatestDossier(for: key) else { return nil }
+        return (key, cached)
+    }
+
     public func loadLatestDossier(for trackKey: String) throws -> CachedDossier? {
         let query = """
         SELECT json_blob, html_path, updated_at, expires_at
